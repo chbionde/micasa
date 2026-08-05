@@ -1,0 +1,40 @@
+name: CI Web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/ci-web.yml"
+  pull_request:
+    paths:
+      - "web/**"
+      - ".github/workflows/ci-web.yml"
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Oxlint
+        run: npm run lint
+
+      - name: Build (tsc + vite)
+        run: npm run build
+
+      - name: Vitest (testes)
+        run: npm run test

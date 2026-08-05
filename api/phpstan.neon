@@ -1,0 +1,13 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - vendor/pestphp/pest/phpstan-pest-extension.neon
+
+parameters:
+    level: 6
+    # tests/ fica de fora: PHPStan não resolve o binding de $this nos closures
+    # do Pest (TestCall::get). Testes são validados pela execução no CI.
+    paths:
+        - app
+        - config
+        - database
+        - routes

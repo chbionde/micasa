@@ -1,0 +1,44 @@
+name: CI API
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "api/**"
+      - ".github/workflows/ci-api.yml"
+  pull_request:
+    paths:
+      - "api/**"
+      - ".github/workflows/ci-api.yml"
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          coverage: none
+
+      - name: Instalar dependências
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Preparar ambiente
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Pint (formatação)
+        run: vendor/bin/pint --test
+
+      - name: Larastan (análise estática)
+        run: vendor/bin/phpstan analyse --memory-limit=1G --no-progress
+
+      - name: Pest (testes)
+        run: php artisan test
