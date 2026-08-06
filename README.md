@@ -8,6 +8,7 @@ O projeto tem dois objetivos simultâneos: ser **usado de verdade por uma famíl
 
 | Documento | Conteúdo |
 |---|---|
+| [docs/como-executar-e-testar.md](docs/como-executar-e-testar.md) | **Comece aqui:** setup, execução local e testes — atualizado a cada fatia |
 | [docs/decisoes.md](docs/decisoes.md) | ADRs — toda decisão de arquitetura, com contexto e consequências. **Decisão fechada não se reabre sem gatilho.** |
 | [docs/escopo-v1.md](docs/escopo-v1.md) | O que entra na v1 e, mais importante, o que fica de fora e por quê |
 | [docs/modelo-dominio.md](docs/modelo-dominio.md) | Entidades, relacionamentos e as invariantes de negócio que são lei |
