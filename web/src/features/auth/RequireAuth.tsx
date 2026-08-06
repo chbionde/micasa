@@ -1,4 +1,4 @@
-import { Navigate, Outlet } from 'react-router'
+import { Navigate, Outlet, useLocation } from 'react-router'
 import { useAuth } from './auth-context'
 
 /**
@@ -8,6 +8,7 @@ import { useAuth } from './auth-context'
  */
 export function RequireAuth() {
   const { status } = useAuth()
+  const location = useLocation()
 
   if (status === 'carregando') {
     return (
@@ -18,7 +19,9 @@ export function RequireAuth() {
   }
 
   if (status === 'visitante') {
-    return <Navigate to="/login" replace />
+    // Guardamos de onde a pessoa veio: quem clicou num link de convite
+    // precisa voltar para ele depois de entrar, não cair no início.
+    return <Navigate to="/login" state={{ de: location.pathname }} replace />
   }
 
   return <Outlet />

@@ -2,7 +2,7 @@
 
 > **Documento vivo:** atualizado ao fim de cada fatia. Se algo aqui não funcionar, o documento está errado — abra uma issue `tipo:docs`.
 >
-> **Última atualização:** 2026-08-06 · estado: Fatia 0 (auth + telas de login; sem deploy ainda)
+> **Última atualização:** 2026-08-06 · estado: Fatia 1 completa (casas, membros, convites; sem deploy ainda)
 
 ---
 
@@ -54,6 +54,16 @@ npm run dev                 # http://localhost:5173
 
 Abra **http://localhost:5173** (sempre `localhost`, não `127.0.0.1` — ver §6). Crie uma conta em "Crie sua conta"; você cai no dashboard logado. O login usa cookie de sessão + CSRF (detalhes no [aprendizado 02](aprendizado/02-auth-sanctum-spa.md)).
 
+### Roteiro para testar a Fatia 1 (casas e membros)
+
+1. **Registre-se** — a casa é criada junto e você vira admin dela. O campo "Nome da casa" é opcional.
+2. Vá em **Casa** no menu: você aparece na lista de membros como administrador.
+3. Clique em **Gerar link de convite** e copie o link. Ele aparece **uma vez só** — o banco guarda apenas o hash.
+4. Abra o link **numa janela anônima**, registre-se com outro e-mail e aceite o convite: a segunda conta entra na casa e passa a vê-la como ativa.
+5. De volta à primeira conta, na tela **Casa**, promova a segunda pessoa a administrador ou remova-a.
+6. Com a segunda conta em duas casas, o **seletor de casa ativa** aparece no cabeçalho (ele fica oculto para quem tem uma casa só).
+7. Tente rebaixar o **último administrador**: a API recusa e a mensagem aparece na tela.
+
 ## 4. Rodar os testes e verificações
 
 ### Back-end (`api/`)
@@ -102,3 +112,4 @@ PR só é mergeável com CI verde. Detalhes do fluxo de branches: [fluxo-trabalh
 | Data | Fatia | O que mudou |
 |---|---|---|
 | 2026-08-06 | 0 | Versão inicial: setup, execução local (API + SPA), testes, CI, troubleshooting |
+| 2026-08-06 | 1 | Roteiro de teste manual de casas, convites e membros |
