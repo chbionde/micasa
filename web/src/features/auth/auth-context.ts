@@ -8,6 +8,8 @@ export type RegisterData = {
   email: string
   password: string
   password_confirmation: string
+  /** Opcional: em branco, a API nomeia como "Casa de {primeiro nome}". */
+  household_name?: string
 }
 
 export type AuthContextValue = {
