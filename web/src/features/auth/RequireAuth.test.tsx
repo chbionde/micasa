@@ -49,7 +49,7 @@ describe('RequireAuth', () => {
 
   it('renderiza o conteúdo para quem tem sessão', async () => {
     apiGet.mockResolvedValue({
-      data: { id: 1, name: 'Carlos', email: 'carlos@exemplo.com.br' },
+      data: { data: { id: 1, name: 'Carlos', email: 'carlos@exemplo.com.br', casa_ativa: null } },
     })
 
     renderRotaPrivada()

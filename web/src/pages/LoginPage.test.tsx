@@ -78,7 +78,11 @@ describe('LoginPage', () => {
 
   it('navega para a área logada quando o login dá certo', async () => {
     const user = userEvent.setup()
-    const usuario = { id: 1, name: 'Carlos', email: 'carlos@exemplo.com.br' }
+    // Envelope `data` do API Resource do Laravel — o mock precisa ter o
+    // mesmo formato da resposta real, senão esconde quebra de contrato.
+    const usuario = {
+      data: { id: 1, name: 'Carlos', email: 'carlos@exemplo.com.br', casa_ativa: null },
+    }
     apiGet.mockImplementation((url) => {
       if (url === '/sanctum/csrf-cookie') return Promise.resolve({})
       if (apiPost.mock.calls.length > 0) return Promise.resolve({ data: usuario })

@@ -89,7 +89,7 @@ it('retorna o usuário autenticado em /api/user', function () {
     $this->actingAs($user)
         ->getJson('/api/user')
         ->assertOk()
-        ->assertJsonPath('email', $user->email);
+        ->assertJsonPath('data.email', $user->email);
 });
 
 it('nega /api/user sem autenticação', function () {
