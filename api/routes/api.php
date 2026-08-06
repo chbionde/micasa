@@ -1,14 +1,22 @@
 <?php
 
+use App\Http\Controllers\HouseholdController;
 use App\Http\Controllers\InvitationController;
+use App\Http\Controllers\MemberController;
+use App\Http\Resources\UserResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/user', fn (Request $request) => $request->user());
+    Route::get('/user', fn (Request $request) => UserResource::make(
+        $request->user()->load('activeHousehold')
+    ));
 
-    // scopeBindings: o convite precisa pertencer à casa da URL, senão 404 —
-    // proteção contra IDOR pela própria resolução de rota.
+    Route::get('/households', [HouseholdController::class, 'index']);
+    Route::put('/user/active-household', [HouseholdController::class, 'switchActive']);
+
+    // scopeBindings: convite e membro precisam pertencer à casa da URL,
+    // senão 404 — proteção contra IDOR pela própria resolução de rota.
     Route::prefix('households/{household}')
         ->scopeBindings()
         ->middleware('throttle:30,1')
@@ -16,6 +24,10 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/invitations', [InvitationController::class, 'index']);
             Route::post('/invitations', [InvitationController::class, 'store']);
             Route::delete('/invitations/{invitation}', [InvitationController::class, 'destroy']);
+
+            Route::get('/members', [MemberController::class, 'index']);
+            Route::patch('/members/{member}', [MemberController::class, 'update']);
+            Route::delete('/members/{member}', [MemberController::class, 'destroy']);
         });
 
     Route::post('/invitations/{token}/accept', [InvitationController::class, 'accept'])

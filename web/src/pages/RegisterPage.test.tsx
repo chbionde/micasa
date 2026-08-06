@@ -44,7 +44,14 @@ describe('RegisterPage', () => {
         ? Promise.resolve({})
         : apiPost.mock.calls.length > 0
           ? Promise.resolve({
-              data: { id: 1, name: 'Carlos Bionde', email: 'carlos@exemplo.com.br' },
+              data: {
+                data: {
+                  id: 1,
+                  name: 'Carlos Bionde',
+                  email: 'carlos@exemplo.com.br',
+                  casa_ativa: null,
+                },
+              },
             })
           : Promise.reject(new Error('sem sessão')),
     )

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../../lib/api'
+import type { Envelope } from '../../lib/api'
 import { AuthContext } from './auth-context'
 import type { AuthStatus, RegisterData } from './auth-context'
 import type { User } from './types'
@@ -15,10 +16,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let ativo = true
 
     api
-      .get<User>('/api/user')
+      .get<Envelope<User>>('/api/user')
       .then((res) => {
         if (ativo) {
-          setUser(res.data)
+          setUser(res.data.data)
           setStatus('autenticado')
         }
       })
@@ -35,8 +36,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const carregarUsuario = useCallback(async () => {
-    const { data } = await api.get<User>('/api/user')
-    setUser(data)
+    const { data } = await api.get<Envelope<User>>('/api/user')
+    setUser(data.data)
     setStatus('autenticado')
   }, [])
 
