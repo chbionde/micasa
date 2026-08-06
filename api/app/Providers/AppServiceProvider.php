@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\User;
+use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -30,5 +32,12 @@ class AppServiceProvider extends ServiceProvider
             Limit::perMinute(10)->by('user:'.$request->user()?->getAuthIdentifier()),
             Limit::perMinute(20)->by('ip:'.$request->ip()),
         ]);
+
+        // O link do e-mail precisa abrir a SPA, não a API — quem redefine a
+        // senha é a tela do front, que depois chama POST /reset-password.
+        ResetPassword::createUrlUsing(
+            fn (User $user, string $token) => rtrim((string) config('app.frontend_url'), '/')
+                .'/redefinir-senha/'.$token.'?email='.urlencode($user->email)
+        );
     }
 }

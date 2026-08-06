@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Account\AccountController;
 use App\Http\Controllers\HouseholdController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\MemberController;
@@ -14,6 +15,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/households', [HouseholdController::class, 'index']);
     Route::put('/user/active-household', [HouseholdController::class, 'switchActive']);
+
+    Route::patch('/user/profile', [AccountController::class, 'updateProfile']);
+    Route::put('/user/password', [AccountController::class, 'updatePassword']);
+    Route::delete('/user', [AccountController::class, 'destroy']);
 
     // scopeBindings: convite e membro precisam pertencer à casa da URL,
     // senão 404 — proteção contra IDOR pela própria resolução de rota.
