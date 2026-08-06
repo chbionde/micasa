@@ -6,6 +6,8 @@ type CampoTextoProps = {
   onChange: (valor: string) => void
   erro?: string
   autoComplete?: string
+  /** Texto de apoio abaixo do campo, para explicar o que é opcional. */
+  ajuda?: string
 }
 
 /**
@@ -21,8 +23,10 @@ export function CampoTexto({
   onChange,
   erro,
   autoComplete,
+  ajuda,
 }: CampoTextoProps) {
   const erroId = `${id}-erro`
+  const ajudaId = `${id}-ajuda`
 
   return (
     <div className="space-y-1">
@@ -36,13 +40,19 @@ export function CampoTexto({
         onChange={(e) => onChange(e.target.value)}
         autoComplete={autoComplete}
         aria-invalid={erro !== undefined}
-        aria-describedby={erro !== undefined ? erroId : undefined}
+        aria-describedby={erro !== undefined ? erroId : ajuda !== undefined ? ajudaId : undefined}
         className="w-full rounded-lg border border-stone-300 px-3 py-2 text-stone-900 focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600/30"
       />
-      {erro !== undefined && (
+      {erro !== undefined ? (
         <p id={erroId} role="alert" className="text-sm text-red-700">
           {erro}
         </p>
+      ) : (
+        ajuda !== undefined && (
+          <p id={ajudaId} className="text-sm text-stone-500">
+            {ajuda}
+          </p>
+        )
       )}
     </div>
   )

@@ -14,6 +14,7 @@ export function RegisterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [passwordConfirmation, setPasswordConfirmation] = useState('')
+  const [householdName, setHouseholdName] = useState('')
   const [erros, setErros] = useState<ValidationErrors | null>(null)
   const [enviando, setEnviando] = useState(false)
 
@@ -28,6 +29,7 @@ export function RegisterPage() {
         email,
         password,
         password_confirmation: passwordConfirmation,
+        household_name: householdName.trim() || undefined,
       })
       navigate('/', { replace: true })
     } catch (error) {
@@ -69,6 +71,14 @@ export function RegisterPage() {
             onChange={setEmail}
             erro={erros?.email?.[0]}
             autoComplete="email"
+          />
+          <CampoTexto
+            id="household_name"
+            label="Nome da casa (opcional)"
+            value={householdName}
+            onChange={setHouseholdName}
+            erro={erros?.household_name?.[0]}
+            ajuda="Em branco, usamos “Casa de {seu primeiro nome}”."
           />
           <CampoTexto
             id="password"
