@@ -22,9 +22,7 @@ class AcceptInvitation
         // Mesma mensagem para token inexistente, expirado ou revogado: não
         // entregamos a quem sonda o sistema a informação de qual é o caso.
         if ($invitation === null || ! $invitation->isUsable()) {
-            throw ValidationException::withMessages([
-                'token' => 'Este convite não é mais válido. Peça um novo link a quem administra a casa.',
-            ]);
+            throw self::conviteInvalido();
         }
 
         $household = $invitation->household;
@@ -36,13 +34,27 @@ class AcceptInvitation
         }
 
         return DB::transaction(function () use ($invitation, $household, $user) {
+            // A verificação acima é só para a mensagem amigável. A garantia
+            // de uso único é este UPDATE condicional: entre a leitura e a
+            // escrita, outra requisição pode ter consumido o convite, e só
+            // quem afeta 1 linha aqui tem direito de entrar na casa.
+            $reivindicado = Invitation::query()
+                ->whereKey($invitation->id)
+                ->whereNull('accepted_at')
+                ->whereNull('revoked_at')
+                ->where('expires_at', '>', now())
+                ->update([
+                    'accepted_at' => now(),
+                    'accepted_by' => $user->id,
+                ]);
+
+            if ($reivindicado === 0) {
+                throw self::conviteInvalido();
+            }
+
             $household->members()->attach($user->id, [
                 'role' => $invitation->role->value,
             ]);
-
-            $invitation->accepted_at = now();
-            $invitation->accepted_by = $user->id;
-            $invitation->save();
 
             // Quem acabou de entrar numa casa quer vê-la: o clique no link
             // é intencional, então trocamos o contexto ativo.
@@ -51,5 +63,12 @@ class AcceptInvitation
 
             return $household;
         });
+    }
+
+    private static function conviteInvalido(): ValidationException
+    {
+        return ValidationException::withMessages([
+            'token' => 'Este convite não é mais válido. Peça um novo link a quem administra a casa.',
+        ]);
     }
 }

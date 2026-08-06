@@ -3,14 +3,23 @@
 namespace App\Http\Requests\Invitations;
 
 use App\Enums\HouseholdRole;
+use App\Models\Household;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class StoreInvitationRequest extends FormRequest
 {
+    /**
+     * Autorização antes da validação: sem isto, quem não pode convidar
+     * receberia 422 (campo inválido) em vez de 403, revelando que o corpo
+     * da requisição chegou a ser analisado.
+     */
     public function authorize(): bool
     {
-        return true;
+        $household = $this->route('household');
+
+        return $household instanceof Household
+            && $this->user()?->isAdminOf($household) === true;
     }
 
     /**

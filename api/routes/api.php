@@ -9,14 +9,15 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // scopeBindings: o convite precisa pertencer à casa da URL, senão 404 —
     // proteção contra IDOR pela própria resolução de rota.
-    Route::prefix('households/{household}')->scopeBindings()->group(function () {
-        Route::get('/invitations', [InvitationController::class, 'index']);
-        Route::post('/invitations', [InvitationController::class, 'store']);
-        Route::delete('/invitations/{invitation}', [InvitationController::class, 'destroy']);
-    });
+    Route::prefix('households/{household}')
+        ->scopeBindings()
+        ->middleware('throttle:30,1')
+        ->group(function () {
+            Route::get('/invitations', [InvitationController::class, 'index']);
+            Route::post('/invitations', [InvitationController::class, 'store']);
+            Route::delete('/invitations/{invitation}', [InvitationController::class, 'destroy']);
+        });
 
-    // Rate limit contra sondagem de tokens (o token tem 40 caracteres
-    // aleatórios; força bruta já é inviável, isto é a segunda barreira).
     Route::post('/invitations/{token}/accept', [InvitationController::class, 'accept'])
-        ->middleware('throttle:10,1');
+        ->middleware('throttle:aceite-convite');
 });

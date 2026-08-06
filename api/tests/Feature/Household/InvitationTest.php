@@ -1,10 +1,13 @@
 <?php
 
+use App\Actions\Invitations\AcceptInvitation;
 use App\Actions\Invitations\CreateInvitation;
 use App\Enums\HouseholdRole;
 use App\Models\Household;
 use App\Models\Invitation;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 function casaComAdmin(): array
 {
@@ -72,6 +75,17 @@ it('exige autenticação para gerar convite', function () {
     [$casa] = casaComAdmin();
 
     $this->postJson("/api/households/{$casa->id}/invitations")->assertUnauthorized();
+});
+
+it('responde 403 antes de validar o corpo para quem não pode convidar', function () {
+    [$casa] = casaComAdmin();
+    $estranho = User::factory()->create();
+
+    // Corpo inválido de propósito: a resposta precisa ser 403 (não pode),
+    // não 422 (campo errado) — senão revelamos que o corpo foi analisado.
+    $this->actingAs($estranho)
+        ->postJson("/api/households/{$casa->id}/invitations", ['papel' => 'dono'])
+        ->assertForbidden();
 });
 
 it('rejeita papel inválido', function () {
@@ -160,6 +174,31 @@ it('não deixa o mesmo convite ser usado duas vezes', function () {
 
     expect($segundo->fresh()->isMemberOf($casa))->toBeFalse()
         ->and($casa->members()->count())->toBe(2);
+});
+
+it('recusa o aceite se o convite for consumido entre a leitura e a escrita', function () {
+    [$casa, $admin] = casaComAdmin();
+    $token = conviteEmClaro($casa, $admin);
+    $primeiro = User::factory()->create();
+    $segundo = User::factory()->create();
+
+    // Simula a corrida: no instante em que a action carrega o convite,
+    // outra requisição já o consumiu. Sem a reivindicação atômica, os dois
+    // entrariam na casa com o mesmo link.
+    Invitation::retrieved(function (Invitation $invitation) use ($primeiro) {
+        if ($invitation->accepted_at === null) {
+            DB::table('invitations')->where('id', $invitation->id)->update([
+                'accepted_at' => now(),
+                'accepted_by' => $primeiro->id,
+            ]);
+        }
+    });
+
+    expect(fn () => app(AcceptInvitation::class)->handle($token, $segundo))
+        ->toThrow(ValidationException::class);
+
+    expect($segundo->fresh()->isMemberOf($casa))->toBeFalse()
+        ->and($casa->members()->count())->toBe(1);
 });
 
 it('avisa quem já é membro em vez de duplicar o vínculo', function () {

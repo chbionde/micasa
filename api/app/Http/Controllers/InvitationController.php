@@ -34,8 +34,7 @@ class InvitationController extends Controller
         Household $household,
         CreateInvitation $createInvitation,
     ): JsonResponse {
-        $this->authorize('manageMembers', $household);
-
+        // Autorização já garantida pelo StoreInvitationRequest::authorize().
         $papel = $request->string('papel')->value();
 
         ['invitation' => $invitation, 'token' => $token] = $createInvitation->handle(
