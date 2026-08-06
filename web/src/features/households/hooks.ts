@@ -32,6 +32,15 @@ export function useConvites(casaId: number | undefined, habilitado: boolean) {
   })
 }
 
+export function useRenomearCasa(casaId: number) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (nome: string) => api.renomearCasa(casaId, nome),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: chaves.casas }),
+  })
+}
+
 export function useAlterarPapel(casaId: number) {
   const queryClient = useQueryClient()
 

@@ -21,6 +21,8 @@ Route::middleware('auth:sanctum')->group(function () {
         ->scopeBindings()
         ->middleware('throttle:30,1')
         ->group(function () {
+            Route::patch('/', [HouseholdController::class, 'update']);
+
             Route::get('/invitations', [InvitationController::class, 'index']);
             Route::post('/invitations', [InvitationController::class, 'store']);
             Route::delete('/invitations/{invitation}', [InvitationController::class, 'destroy']);

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Households\SwitchActiveHousehold;
 use App\Http\Requests\Households\SwitchActiveHouseholdRequest;
+use App\Http\Requests\Households\UpdateHouseholdRequest;
 use App\Http\Resources\HouseholdResource;
 use App\Http\Resources\UserResource;
 use App\Models\Household;
@@ -18,6 +19,16 @@ class HouseholdController extends Controller
         return HouseholdResource::collection(
             $request->user()->households()->orderBy('name')->get()
         );
+    }
+
+    public function update(UpdateHouseholdRequest $request, Household $household): HouseholdResource
+    {
+        $household->update([
+            'name' => $request->string('nome')->value(),
+            ...$request->has('fuso') ? ['timezone' => $request->string('fuso')->value()] : [],
+        ]);
+
+        return HouseholdResource::make($household);
     }
 
     public function switchActive(
