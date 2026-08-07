@@ -1,6 +1,8 @@
 # Aprendizado 10 — Ensaiar a produção antes da produção
 
-> O que foi feito: o ambiente de desenvolvimento mudou de Windows para Linux, e o script que monta o servidor de produção foi executado numa máquina descartável antes de tocar na VPS de verdade. O ensaio encontrou três defeitos — dois deles capazes de deixar o site rodando código velho sem que nada parecesse errado. Este documento é sobre uma ideia só: **infraestrutura também é código, e código que nunca foi executado não funciona.**
+> O que foi feito: o ambiente de desenvolvimento mudou de Windows para Linux, o script que monta o servidor de produção foi ensaiado numa máquina descartável, e só então rodou na VPS de verdade. O ensaio encontrou três defeitos. A VPS real encontrou outros três — e esses eram piores. O MiCasa entrou no ar em `https://micasa-bionde.duckdns.org`.
+>
+> Este documento é sobre duas ideias que puxam em direções opostas e são ambas verdadeiras: **infraestrutura é código, e código nunca executado não funciona** — mas também **ensaio não é produção, e quem confunde os dois troca um erro por outro.**
 
 ---
 
@@ -248,11 +250,146 @@ A correção foi no comentário, não no comportamento — `LOG_LEVEL=warning` e
 
 **Quão comum no mercado:** comentário que descreve uma intenção antiga em vez do comportamento atual é uma das formas mais comuns de dívida técnica, e das mais traiçoeiras — código errado você desconfia, comentário errado você acredita. A regra prática: **comentário que faz uma afirmação verificável deve ser verificado**, não revisado no olho.
 
-## 9. Idempotência: rodar duas vezes não pode quebrar
+## 9. O que o ensaio efetivamente provou
+
+Vale listar, porque é o retorno do investimento:
+
+- O `nginx` sobe, e o roteamento de **origem única** funciona: `/` entrega a aplicação React, `/api/user` chega ao Laravel, `/casa` devolve a página em vez de erro 404
+- O login por cookie de sessão funciona ponta a ponta
+- O banco SQLite ativa o modo WAL
+- A fila processa tarefas em segundo plano sem falhar
+- O agendador roda de minuto em minuto
+
+Um detalhe do teste vale registro, porque parecia defeito e não era: as primeiras tentativas de login devolviam "não autenticado" mesmo com os cookies corretos. A causa não era o servidor — era o `curl`. O Laravel decide se trata a requisição como vinda do próprio site olhando os cabeçalhos `Origin` e `Referer`, que **todo navegador envia automaticamente** e que o `curl` só envia se você pedir. Adicionados os cabeçalhos, o login passou.
+
+Quando uma ferramenta de linha de comando discorda do navegador, desconfie primeiro da ferramenta. Ela é honesta demais — só faz o que você mandou.
+
+## 10. E então a VPS real achou outros três
+
+Aqui a história vira, e é a parte mais importante deste documento.
+
+O ensaio deu confiança. Três defeitos corrigidos, tudo verde, dois scripts rodando repetidamente sem erro. A conclusão natural seria "o script está pronto". **Estava errada.** A VPS real revelou mais três defeitos, e os três eram piores que os anteriores.
+
+### 10.1. O banco que vira somente-leitura no segundo deploy
+
+O sintoma:
+
+```
+attempt to write a readonly database
+```
+
+E o desconcertante: o arquivo do banco estava gravável, e o diretório tinha exatamente as permissões que o manual mandava conferir.
+
+A causa está numa distinção fina entre **dono** e **grupo**. Os diretórios foram criados com uma marca chamada *setgid*, que faz todo arquivo novo herdar o **grupo** da pasta. Ótimo — mas setgid não herda o **dono**.
+
+Quando o servidor web (`www-data`) atende uma requisição, o SQLite cria dois arquivos auxiliares do modo WAL, `database.sqlite-wal` e `-shm`. Eles nascem pertencendo ao `www-data`. Já o usuário que faz o deploy é o `ubuntu` — e ele **não era membro do grupo `www-data`**. Resultado:
+
+| Arquivo | Dono | O que o `ubuntu` podia |
+|---|---|---|
+| `database.sqlite` | `ubuntu` | escrever (é o dono) |
+| `database.sqlite-wal` | `www-data` | **só ler** |
+
+E o SQLite precisa escrever no `-wal` para qualquer escrita. Daí o "banco somente-leitura" com o banco perfeitamente gravável.
+
+O detalhe cruel: **isso não aparece no primeiro deploy.** Enquanto o servidor web não atendeu nenhuma requisição, os arquivos WAL nem existem. O problema nasce depois que o site recebe a primeira visita — ou seja, aparece no segundo deploy em diante, que é justamente quando você já confia no processo.
+
+A correção foi colocar o usuário de deploy no grupo: `usermod -aG www-data ubuntu`. Com uma pegadinha adicional que vale saber: **mudança de grupo só vale em sessão nova.** Você precisa sair e entrar no SSH; até lá, o comando continua falhando e parece que a correção não funcionou.
+
+**Quão comum no mercado:** o par dono/grupo entre "quem publica" e "quem executa" é um clássico de servidor web, e a variante com SQLite + WAL pega gente experiente porque o arquivo que aparece no erro não é o arquivo que causou o erro.
+
+### 10.2. O erro de teste que deixou isso passar
+
+Esta subseção existe porque o erro foi meu e é instrutivo.
+
+No ensaio, eu quis verificar exatamente isso — se o usuário de deploy conseguia escrever no banco com os arquivos WAL presentes. Rodei:
+
+```bash
+php artisan migrate --force
+```
+
+E a resposta foi:
+
+```
+INFO  Nothing to migrate.
+```
+
+Interpretei como sucesso. Mas "nada para migrar" significa que o comando **não escreveu nada**. Eu tinha executado um teste que não exercitava o que eu afirmava estar testando, e registrei um "funciona" que não tinha sido demonstrado.
+
+O teste correto, feito depois na VPS, foi uma escrita de verdade — apagar um registro e conferir que o banco aceitou.
+
+**A lição, que vale para todo teste:** um teste que passa sem exercitar o comportamento não é um teste fraco, é um **teste falso** — pior que nenhum, porque produz confiança. Antes de aceitar um verde, pergunte: *se o comportamento estivesse quebrado, este teste teria ficado vermelho?* Se a resposta não for um sim claro, o teste não vale.
+
+**Quão comum no mercado:** muito, e tem nome. É por isso que existe *mutation testing* — uma técnica que estraga o seu código de propósito para ver se algum teste percebe. Testes que continuam verdes com o código quebrado são exatamente este defeito.
+
+### 10.3. Cabeçalhos de segurança que chegavam no lugar errado
+
+A configuração do nginx declarava três cabeçalhos de proteção no nível do servidor — entre eles o `X-Frame-Options: DENY`, que impede a página de ser embutida num iframe (a base do golpe de *clickjacking*).
+
+Medindo em produção, o resultado foi o inverso do pretendido:
+
+| Rota | Cabeçalhos |
+|---|---|
+| `/up`, `/api/*` — respostas **JSON** | ✅ presentes |
+| `/` — a página **HTML** | ❌ ausentes |
+| `/assets/*.js`, `*.css` | ❌ ausentes |
+
+A causa é uma regra do nginx que contraria a intuição: **`add_header` não é aditivo.** Se um bloco `location` declara qualquer `add_header` próprio, ele **descarta todos** os herdados do nível acima. Não soma — substitui.
+
+Como os blocos que servem o HTML e os assets declaravam um `Cache-Control` próprio, perdiam os três de segurança junto. Sobrava proteção apenas nas respostas JSON, onde clickjacking não faz sentido, e faltava exatamente na página que pode ser enquadrada.
+
+A correção foi repetir os três cabeçalhos nos blocos que têm `add_header` próprio — feio, mas é como o nginx funciona.
+
+**Quão comum no mercado:** essa regra específica é uma das pegadinhas mais conhecidas do nginx e continua pegando gente todo ano. O padrão maior — *"herança que some quando você sobrescreve"* — aparece em CSS, em configuração de logging, em permissões. Vale a suspeita sempre que houver herança e sobrescrita no mesmo lugar.
+
+### 10.4. O script "idempotente" que derrubava o site
+
+Este foi o pior, e é irônico: o próprio documento tinha uma seção celebrando a idempotência dos scripts.
+
+O `provision.sh` declarava, no cabeçalho: *"É idempotente: rodar duas vezes não quebra nada."* Rodei duas vezes na VPS. **A porta 443 fechou e o site caiu para HTTP puro.**
+
+A cadeia:
+
+1. O script gera a configuração do nginx a partir de um modelo versionado. O modelo só sabe de HTTP (`listen 80`).
+2. O certbot, ao emitir o certificado, **edita esse mesmo arquivo**, acrescentando as linhas de HTTPS e o redirecionamento.
+3. Na segunda execução, o passo 1 regenera o arquivo do zero — apagando o que o certbot escreveu.
+4. E o passo do certificado dizia apenas *"certificado já existe, pulando"* — então nada recolocava o HTTPS.
+
+E não foi degradação suave. A aplicação usa cookie de sessão marcado como `Secure`, que **o navegador se recusa a enviar por HTTP**. Sem HTTPS, ninguém consegue autenticar. O site não ficou pior; ficou inutilizável.
+
+O agravante: a tabela de diagnóstico do próprio projeto manda *"rode o `provision.sh` de novo"* como solução para um outro problema. O manual instruía o usuário a executar a ação que derrubava o site.
+
+A correção foi trocar o "pular" por um comando que reinstala a configuração a partir do certificado que já está no disco (`certbot install`) — sem contactar a autoridade certificadora e sem gastar cota de emissão. Depois, o teste que importava: rodar duas vezes seguidas e confirmar que o HTTPS sobrevive.
+
+**Quão comum no mercado:** a colisão entre "arquivo gerado por template" e "arquivo editado por outra ferramenta" é um problema estrutural de automação, não um descuido pontual. Ferramentas maduras lidam com isso separando o que é gerado do que é acrescentado — no nginx, por exemplo, mantendo o bloco SSL num arquivo `include` que o template não toca.
+
+E a lição maior: **"é idempotente" é uma afirmação testável.** Enquanto ninguém rodar duas vezes e conferir o resultado, é só uma intenção escrita num comentário.
+
+## 11. Então o ensaio valeu a pena?
+
+Valeu, e a resposta honesta é mais interessante que um sim.
+
+O ensaio pegou **três** defeitos. A VPS pegou **outros três**. Se olharmos só para os números, parece que o ensaio entregou metade do que prometia. Mas veja *quais* defeitos cada ambiente pegou:
+
+| Defeito | Onde apareceu | Podia ter aparecido no ensaio? |
+|---|---|---|
+| Ordem do runbook | ensaio | sim |
+| `chmod` matando o deploy | ensaio | sim |
+| Log do e-mail descartado | ensaio | sim |
+| Banco somente-leitura | VPS | **sim** — falhou por erro de teste meu |
+| Cabeçalhos de segurança | VPS | **sim** — bastava ter medido |
+| HTTPS derrubado | VPS | **não** — depende do certbot, que exige domínio público |
+
+Ou seja: dos três que escaparam, **apenas um era realmente impossível de pegar no ensaio.** Os outros dois escaparam porque eu não olhei — um por um teste que não testava, outro por não ter medido os cabeçalhos.
+
+Isso muda a conclusão. O limite do ensaio não foi principalmente o ambiente; foi **o cuidado de quem ensaiou**. É uma constatação mais útil do que "ensaio não pega tudo", porque aponta para algo acionável: a maior parte da diferença estava ao alcance de um teste melhor.
+
+E a parte que o ambiente realmente limita continua valendo o alerta do início: HTTPS, firewall da nuvem e pressão de memória só existem de verdade na máquina de verdade. Por isso o ensaio **antecede** a produção, nunca a substitui.
+
+## 12. Idempotência: rodar duas vezes não pode quebrar
 
 Uma palavra que aparece muito em infraestrutura: **idempotente**. Significa que executar a operação várias vezes tem o mesmo efeito de executá-la uma vez.
 
-Por que isso importa tanto aqui: scripts de servidor são rodados de novo o tempo todo. A conexão SSH cai no meio. Você corrige uma linha e roda outra vez. O certificado falhou porque o DNS ainda não tinha propagado, e você tenta de novo em dez minutos. Um script que só funciona em máquina virgem é um script que funciona uma vez.
+Por que isso importa tanto aqui: scripts de servidor são rodados de novo o tempo todo. A conexão SSH cai no meio. Você corrige uma linha e roda outra vez. O certificado falhou porque o DNS ainda não tinha propagado, e você tenta em dez minutos. Um script que só funciona em máquina virgem é um script que funciona uma vez.
 
 Na prática, é o que se vê nas verificações antes de agir:
 
@@ -262,34 +399,27 @@ if ! command -v composer; then       # só instala se falta
 ln -sf ...                           # -f: sobrescreve sem reclamar
 ```
 
-No ensaio isso foi testado de propósito: o `provision.sh` rodou **três vezes** e o `deploy.sh` **duas**, todas terminando com sucesso.
+Mas a seção 10.4 mostrou o outro lado: essas verificações dão a *aparência* de idempotência sem garanti-la. O script tinha todas elas e mesmo assim derrubava o site na segunda execução, porque o problema não estava em nenhum comando isolado — estava na interação entre dois passos distantes um do outro.
 
-**Quão comum no mercado:** é o princípio fundador das ferramentas de automação de infraestrutura — Ansible, Puppet, Chef, Terraform são todas construídas em torno dele. A mentalidade é "declare o estado desejado", não "execute estes passos".
+**Idempotência não se lê no código, se mede executando.**
 
-## 10. O que o ensaio efetivamente provou
+**Quão comum no mercado:** é o princípio fundador das ferramentas de automação — Ansible, Puppet, Chef, Terraform são todas construídas em torno dele. A mentalidade é "declare o estado desejado", não "execute estes passos".
 
-Vale listar, porque é o retorno do investimento:
-
-- O `nginx` sobe, e o roteamento de **origem única** funciona: `/` entrega a aplicação React, `/api/user` chega ao Laravel, `/casa` devolve a página em vez de erro 404
-- O login por cookie de sessão funciona ponta a ponta: pedir o token de segurança, registrar, autenticar, consultar o usuário logado
-- O banco SQLite ativa o modo WAL, e os arquivos auxiliares que ele cria nascem com as permissões certas
-- A fila processa tarefas em segundo plano sem falhar
-- O agendador roda de minuto em minuto
-- Os dois scripts são idempotentes
-
-Um detalhe do teste vale registro, porque quase virou um quarto "defeito": as primeiras tentativas de login devolviam "não autenticado" mesmo com os cookies corretos. A causa não era o servidor — era o `curl`. O Laravel decide se trata a requisição como vinda do próprio site olhando os cabeçalhos `Origin` e `Referer`, que **todo navegador envia automaticamente** e que o `curl` não envia a menos que você peça. Adicionados os cabeçalhos, o login passou.
-
-A lição: quando uma ferramenta de linha de comando discorda do navegador, desconfie primeiro da ferramenta. Ela é honesta demais — só faz o que você mandou.
-
-## 11. Como conferir
+## 13. Como conferir
 
 ```bash
-# serviços de pé
+# serviços de pé (na VPS)
 systemctl is-active nginx php8.4-fpm micasa-queue
 
 # a aplicação responde
-curl -sS http://SEU_DOMINIO/up          # health check do Laravel
-curl -sS http://SEU_DOMINIO/            # a SPA
+curl -sS https://micasa-bionde.duckdns.org/up     # health check do Laravel
+curl -sS https://micasa-bionde.duckdns.org/       # a SPA
+
+# HTTP tem de redirecionar para HTTPS
+curl -sI http://micasa-bionde.duckdns.org/ | head -1     # espera-se 301
+
+# os cabeçalhos de segurança chegam no HTML, não só na API
+curl -sI https://micasa-bionde.duckdns.org/ | grep -i x-frame
 
 # a suíte de testes, igual ao CI
 cd ~/code/micasa/api && vendor/bin/pint --test \
@@ -298,7 +428,19 @@ cd ~/code/micasa/api && vendor/bin/pint --test \
 cd ~/code/micasa/web && npm run lint && npx tsc -b && npm run test
 ```
 
-## 12. Resumo do que este documento ensinou
+## 14. Uma nota sobre estar no ar
+
+Minutos depois de o certificado ser emitido, o servidor já registrava visitas de endereços desconhecidos, de faixas de datacenter.
+
+Não é coincidência nem invasão. Toda emissão de certificado é publicada num registro público chamado **Certificate Transparency** — criado para que ninguém consiga emitir um certificado do seu domínio às escondidas. O efeito colateral é que o registro também é varrido continuamente por robôs em busca de domínios novos.
+
+A consequência prática: **um domínio novo não é secreto.** Não existe "ninguém sabe o endereço ainda". A partir do primeiro certificado, o endereço é público e será visitado. Se houver cadastro aberto, alguém vai cadastrar.
+
+No MiCasa isso está sob controle por duas razões que já vinham do projeto: as rotas de autenticação têm limite de tentativas por minuto, e o isolamento por casa garante que uma conta desconhecida não enxergue nada de outra. Mas é bom saber que a proteção veio de decisões tomadas antes, não da obscuridade do endereço.
+
+**Quão comum no mercado:** universal e frequentemente ignorado. Muita equipe trata um ambiente de homologação como privado porque "o link não foi divulgado" — e ele está em índices públicos desde o primeiro certificado.
+
+## 15. Resumo do que este documento ensinou
 
 | Ideia | Em uma frase |
 |---|---|
@@ -310,6 +452,12 @@ cd ~/code/micasa/web && npm run lint && npx tsc -b && npm run test
 | Runbook não executado | Documentação só funciona depois de alguém segui-la numa máquina limpa |
 | `set -e` e ordem dos passos | Pergunte sempre "e se morrer exatamente aqui?" |
 | Comentário verificável | Deve ser verificado, não revisado no olho |
-| Idempotência | Rodar de novo é o caso normal, não a exceção |
+| Dono ≠ grupo | `setgid` herda o grupo, nunca o dono — e é aí que o WAL trava |
+| Teste que não testa | Se o comportamento quebrasse, este teste ficaria vermelho? |
+| Herança que some | No nginx, `add_header` do filho descarta os do pai |
+| Idempotência | Não se lê no código; mede-se executando duas vezes |
+| Domínio novo não é secreto | Certificate Transparency publica todo certificado emitido |
 
-E a ideia que costura todas: **um script de infraestrutura é código.** Código não revisado tem bug; código nunca executado tem mais ainda. A diferença é que o bug do script de infraestrutura só aparece no dia em que você mais precisa que ele funcione.
+E a ideia que costura todas: **um script de infraestrutura é código.** Código não revisado tem bug; código nunca executado tem mais ainda.
+
+Mas o fecho honesto deste documento é outro, e foi aprendido do jeito difícil: **executar não basta — é preciso conferir o resultado certo.** Três dos seis defeitos passaram por um ensaio inteiro, e dois deles não escaparam por limitação do ambiente. Escaparam porque um teste respondeu "nada a fazer" e eu li "funcionou".

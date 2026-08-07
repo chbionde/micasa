@@ -2,7 +2,7 @@
 
 > **Documento vivo:** atualizado ao fim de cada fatia. Se algo aqui não funcionar, o documento está errado — abra uma issue `tipo:docs`.
 >
-> **Última atualização:** 2026-08-07 · estado: Fatias 0, 1 e 1.5 completas; Fatia 2 em andamento (listas: #33 e #34 na `main`); infraestrutura de produção ensaiada
+> **Última atualização:** 2026-08-07 · estado: Fatias 0, 1 e 1.5 completas; Fatia 2 em andamento (listas: #33 e #34 na `main`). **Em produção desde 07/08/2026** em https://micasa-bionde.duckdns.org
 
 ---
 
