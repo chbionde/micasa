@@ -154,6 +154,13 @@
 **CI (GitHub Actions):** Pint + Larastan + Pest + `tsc` + Vitest em cada push, com filtros de path do monorepo.
 **Vetado sem discussão:** Livewire, libs não-oficiais de WhatsApp, ORM alternativo, microserviços, Docker multi-container.
 
+## ADR-019 (2026-08-07) — Permissões das listas de compras: membro faz tudo
+
+**Contexto:** o levantamento da Fase 0 descrevia membro comum como "visualização e interação com itens pré-programados (ex.: dar check numa lista)". Ao chegar na Fatia 2, isso se mostrou restritivo demais para o uso real: quem percebe que o café acabou precisaria pedir a um admin para adicionar o item.
+**Opções:** (a) membro faz tudo nas listas; (b) fiel ao levantamento — membro só marca comprado; (c) meio-termo — admin cria listas, membro gerencia itens.
+**Decisão (dev, 2026-08-07):** **(a)** — membro comum cria lista, adiciona/edita/remove itens, marca comprado e renomeia/arquiva listas. **Apagar lista é exclusivo de admin.**
+**Consequências:** a distinção admin/membro fica concentrada em gestão de pessoas e em ações destrutivas. `ShoppingListPolicy`: `viewAny`/`view`/`create`/`update` exigem ser membro da casa; `delete` exige admin. Domínios futuros (tarefas, despesas) devem reavaliar o próprio nível — esta decisão vale para listas, não é regra geral.
+
 ---
 
 ## Decisões adiadas (com gatilho)
