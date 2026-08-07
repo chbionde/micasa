@@ -26,9 +26,11 @@
 
 Quando uma entrega depende de outra ainda em revisão, o segundo PR nasce **com base no primeiro** (não na `main`). Isso é normal e o GitHub avisa na tela do PR.
 
-**A armadilha:** ao mergear o primeiro, o GitHub reaponta a base do seguinte para a `main` — mas leva alguns segundos. Se você mergear os dois em sequência rápida, o segundo é mergeado **dentro da branch do primeiro**, e o código nunca chega na `main`. Aconteceu em 2026-08-07 com os PRs #29 e #30; a recuperação exigiu um PR extra (#32).
+**A armadilha:** o GitHub só reaponta a base do PR seguinte **quando a branch-base é apagada no merge**. Se o repositório não apaga a branch automaticamente, a base continua existindo e o segundo PR é mergeado **dentro da branch do primeiro** — o código nunca chega na `main`. Aconteceu duas vezes em 2026-08-07 (PRs #29/#30 e depois #38), exigindo PRs de recuperação.
 
-**Regra:** mergeie um PR empilhado de cada vez, e só siga para o próximo depois de **conferir na tela dele que a base virou `main`**.
+**Correções aplicadas:**
+1. A opção **"Automatically delete head branches"** foi ligada no repositório. Com ela, mergear o PR de baixo apaga a branch e o GitHub reaponta o de cima para a `main` sozinho.
+2. **Antes de mergear um PR empilhado, confira o campo de base na tela dele.** Se ainda apontar para uma branch, troque para `main` no botão "Edit" ao lado do título — não adianta esperar.
 
 **Consequência do squash:** como usamos merge por squash, os commits originais são substituídos por um novo. Se uma branch empilhada já existia, ela perde a ancestralidade comum e o merge seguinte acusa conflito `add/add` em arquivos idênticos. Resolver tomando a versão da branch empilhada (ela é superconjunto) e **rodar a suíte** para confirmar.
 
