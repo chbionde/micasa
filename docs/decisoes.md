@@ -52,6 +52,17 @@
 
 **Consequências:** ~1 sessão (5h) extra por conceito, concentrada nas fatias 2–3. Versões manuais viram commits de exercício, não código final. A migração manual→lib é material de estudo do Tutor React.
 
+### Emenda (2026-08-07) — RHF + Zod antecipado da Fatia 3 para a Fatia 2
+
+**Contexto:** o ADR previa formulários manuais primeiro e RHF + Zod "na fatia seguinte", com o plano marcando a adoção na Fatia 3. Até o fim da Fatia 1.5 foram escritos **oito formulários controlados à mão** (login, registro, três seções da conta, renomear casa, esqueci senha, redefinir senha) — o objetivo de "sentir a fiação antes da abstração" está cumprido com folga. O formulário de item de lista (Fatia 2) tem seis campos opcionais, que é onde o manual passa a custar mais do que ensina.
+**Decisão (dev, 2026-08-07):** adotar **React Hook Form + Zod na Fatia 2**, a partir da issue #36 (front das listas).
+**Consequências analisadas:**
+- **Cronograma:** Fatia 2 ganha ~1 sessão (5h) para aprender RHF + Zod; Fatia 3 perde a mesma sessão, já que chegará com a lib conhecida. **Efeito líquido no cronograma: zero.**
+- **Aprendizado:** nenhuma perda — o exercício manual já foi feito oito vezes; o que muda é o momento de colher o ganho.
+- **Risco:** baixo. A Fatia 2 já não tem outro conceito novo grande (TanStack Query entrou na Fatia 1).
+- **O que fica desatualizado:** a coluna "conteúdo de aprendizado" das fatias 2 e 3 em `plano-fatias.md`, corrigida junto.
+- **O que NÃO muda:** o método híbrido do ADR-006 continua valendo para os próximos conceitos (ex.: estado global só quando doer).
+
 ## ADR-007 — Multi-casa: cadastro cria casa, convite por link, pivô com papel
 
 **Contexto:** suporte a várias casas decidido desde o início ("adicionar depois é caro"). Faltava o modelo de entrada.

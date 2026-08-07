@@ -6,8 +6,8 @@
 |---|---|---|---|
 | 0 | Monorepo, CI (Pint+Larastan+Pest+tsc+Vitest), auth e-mail+senha (Sanctum SPA), layout base, deploy Oracle + script de provisionamento, backup cifrado + **1ª restauração testada** | Setup Vite/TS, estrutura de SPA, fluxo de auth com cookie/CSRF | Adversário de Segurança (auth) |
 | 1 | Casas, membros, convite por link, papéis, policies, seletor de casa ativa | React Router, contexto de auth/casa ativa (`useContext`) | Adversário de Segurança (authz/IDOR) |
-| 2 | Listas de compras: CRUD, autocomplete do histórico, duplicar, arquivar | **Fatia-escola:** fetch manual → TanStack Query; formulário manual → base p/ RHF | — |
-| 3 | Tarefas/eventos/lembretes (tabela única), responsável, filtros — sem recorrência | RHF + Zod, tipos derivados do contrato, filtros com estado de URL | — |
+| 2 | Listas de compras: CRUD, autocomplete do histórico, duplicar, arquivar | **RHF + Zod** (antecipado da Fatia 3 — ver emenda do ADR-006) | — |
+| 3 | Tarefas/eventos/lembretes (tabela única), responsável, filtros — sem recorrência | Tipos derivados do contrato, filtros com estado de URL | — |
 | 4 | Bot Telegram: webhook seguro, deep link de vinculação, comandos de consulta, `ConsoleChannel` de teste | (pouco front) TS no contrato dos DTOs | Adversário de Segurança (webhook/whitelist) |
 | 5 | Despesas: definição/ocorrência, RecurrenceService, BusinessDayService, materialização 12 meses, pagamento | Tabelas/listagens com Query, formulários monetários (centavos na borda) | Auditor de Lógica (obrigatório) + reavaliar Litestream (ADR-009) |
 | 6 | Lembretes proativos via bot (vencimentos, prazos) — bot envia, não escreve | — | Auditor de Lógica (fuso/agendamento) |
