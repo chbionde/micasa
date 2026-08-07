@@ -107,9 +107,40 @@ PR só é mergeável com CI verde. Detalhes do fluxo de branches: [fluxo-trabalh
 | Mudou `.env` e nada aconteceu | `php artisan config:clear` |
 | Porta 8000 ou 5173 ocupada | `php artisan serve --port=8001` (e ajuste `VITE_API_URL`) / o Vite oferece outra porta sozinho |
 
-## 7. Histórico deste documento
+## 7. Produção
+
+A VPS é uma `VM.Standard.E2.1.Micro` da Oracle Cloud (Vinhedo), com Ubuntu 24.04 e 1 GB de RAM. Runbook completo, incluindo tabela de diagnóstico: [infra/README.md](../infra/README.md). O porquê de cada decisão: [aprendizado 09](aprendizado/09-vps-oracle-e-deploy.md).
+
+**Endereço:** `https://micasa-bionde.duckdns.org`
+
+### Publicar
+
+```bash
+# front (na sua máquina — o build não cabe em 1 GB de RAM)
+cd web && npm run build
+scp -i $env:USERPROFILE\.ssh\id_ed25519 -r dist/* ubuntu@IP:/var/www/micasa/web/dist/
+
+# back (na VPS)
+ssh -i $env:USERPROFILE\.ssh\id_ed25519 ubuntu@IP
+cd /var/www/micasa && ./infra/deploy.sh
+```
+
+### Diferenças entre desenvolvimento e produção
+
+| | Desenvolvimento | Produção |
+|---|---|---|
+| Origens | duas (Vite `:5173`, API `:8000`) — CORS ativo | **uma** só; nginx entrega os dois (ADR-020) |
+| `baseURL` do axios | `http://localhost:8000` | vazia (caminhos relativos) |
+| SQLite | modo padrão | **WAL** + `busy_timeout` |
+| Fila e scheduler | `composer dev` | systemd + cron |
+| Erros | `APP_DEBUG=true` | `false`, log `daily` em nível `warning` |
+
+> A rota da tela de login é **`/entrar`**, não `/login` — `/login` pertence ao Laravel. Ver ADR-020.
+
+## 8. Histórico deste documento
 
 | Data | Fatia | O que mudou |
 |---|---|---|
 | 2026-08-06 | 0 | Versão inicial: setup, execução local (API + SPA), testes, CI, troubleshooting |
 | 2026-08-06 | 1 | Roteiro de teste manual de casas, convites e membros |
+| 2026-08-07 | 0 (#3) | Seção de produção: VPS Oracle, publicação e diferenças entre os ambientes |

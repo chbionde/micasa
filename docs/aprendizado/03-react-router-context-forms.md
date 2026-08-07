@@ -75,6 +75,8 @@ O usuário logado é necessário no header, no dashboard, nas guardas… Passar 
 
 ## 5. React Router — a SPA com várias telas
 
+> **Nota (2026-08-07):** a rota `/login` mostrada abaixo passou a se chamar `/entrar`. Em produção a SPA e a API compartilham o mesmo endereço, e `GET /login` (tela) colidia com `POST /login` (autenticação do Laravel). O motivo completo está no [doc 09, seção 7](09-vps-oracle-e-deploy.md) e no ADR-020. A **chamada de API** continua sendo `/login` — o que mudou foi só o endereço da tela.
+
 Numa SPA o servidor não navega; o **React Router** troca componentes conforme a URL, sem recarregar a página:
 
 ```tsx
