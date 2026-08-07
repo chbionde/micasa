@@ -2,19 +2,34 @@
 
 > **Documento vivo:** atualizado ao fim de cada fatia. Se algo aqui não funcionar, o documento está errado — abra uma issue `tipo:docs`.
 >
-> **Última atualização:** 2026-08-06 · estado: Fatia 1 completa (casas, membros, convites; sem deploy ainda)
+> **Última atualização:** 2026-08-07 · estado: Fatias 0, 1 e 1.5 completas; Fatia 2 em andamento (listas: #33 e #34 na `main`); infraestrutura de produção ensaiada
 
 ---
 
 ## 1. Pré-requisitos (uma vez por máquina)
 
-| Ferramenta | Versão | Como instalar |
-|---|---|---|
-| Git | 2.x | https://git-scm.com |
-| PHP + Composer | 8.4+ / 2.x | [Laravel Herd](https://herd.laravel.com) — instala os dois e configura o PATH |
-| Node.js + npm | 22+ | https://nodejs.org |
+O desenvolvimento roda em **Linux** — no Windows, via WSL com Ubuntu 24.04. Mantenha o repositório no disco do Linux (`~/code/micasa`), **nunca** em `/mnt/c/...`: ali cada acesso a arquivo atravessa uma ponte entre os dois sistemas e o `composer install` leva minutos em vez de segundos.
 
-Confira no terminal: `php --version`, `composer --version`, `node --version`.
+| Ferramenta | Versão | Por que essa versão |
+|---|---|---|
+| Git | 2.x | |
+| PHP | **8.4** | `.github/workflows/ci-api.yml`. O `composer.lock` exige `>= 8.4.1` — o 8.3 do Ubuntu não instala |
+| Composer | 2.x | |
+| Node.js + npm | **22** | `.github/workflows/ci-web.yml` |
+
+O Ubuntu 24.04 só traz PHP 8.3, então o 8.4 vem do PPA do ondrej — o mesmo que o `infra/provision.sh` usa no servidor:
+
+```bash
+sudo add-apt-repository -y ppa:ondrej/php && sudo apt update
+sudo apt install -y php8.4-cli php8.4-sqlite3 php8.4-mbstring php8.4-xml \
+  php8.4-curl php8.4-zip php8.4-bcmath php8.4-intl php8.4-opcache
+sudo update-alternatives --set php /usr/bin/php8.4
+
+# Node 22 via nvm
+nvm install 22 && nvm use 22
+```
+
+Confira: `php --version`, `composer --version`, `node --version`. As três versões precisam bater com o CI — quando divergem, quem está errado é a sua máquina. Ver [aprendizado 10](aprendizado/10-ensaio-de-producao-no-wsl.md).
 
 ## 2. Setup do zero (uma vez por clone)
 
@@ -118,12 +133,16 @@ A VPS é uma `VM.Standard.E2.1.Micro` da Oracle Cloud (Vinhedo), com Ubuntu 24.0
 ```bash
 # front (na sua máquina — o build não cabe em 1 GB de RAM)
 cd web && npm run build
-scp -i $env:USERPROFILE\.ssh\id_ed25519 -r dist/* ubuntu@IP:/var/www/micasa/web/dist/
+scp -i ~/.ssh/id_ed25519 -r dist/* ubuntu@IP:/var/www/micasa/web/dist/
 
 # back (na VPS)
-ssh -i $env:USERPROFILE\.ssh\id_ed25519 ubuntu@IP
+ssh -i ~/.ssh/id_ed25519 ubuntu@IP
 cd /var/www/micasa && ./infra/deploy.sh
 ```
+
+### Ensaiar o provisionamento sem tocar na VPS
+
+`PULAR_AJUSTES_DE_HOST=1` desliga fuso, swap, `iptables` e certbot, e deixa o `provision.sh` rodar num WSL ou numa VM descartável. Serve para pegar erro de ordem e de permissão antes do servidor. Ver [infra/README.md](../infra/README.md#ensaio-fora-da-vps) e [aprendizado 10](aprendizado/10-ensaio-de-producao-no-wsl.md).
 
 ### Diferenças entre desenvolvimento e produção
 
