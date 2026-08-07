@@ -64,7 +64,16 @@ php artisan event:cache
 # O WAL do SQLite cria database.sqlite-wal e -shm ao lado do banco, então o
 # grupo precisa de escrita no diretório, não só no arquivo.
 log "Ajustando permissões"
-chmod -R g+w storage bootstrap/cache database
+# sudo porque quem escreve aqui não é só o usuário de deploy: o cron do
+# scheduler e o PHP-FPM rodam como www-data e criam arquivos próprios —
+# storage/logs/laravel-AAAA-MM-DD.log é o caso garantido, o cron cria um por dia.
+#
+# chmod exige ser dono do arquivo e falha com EPERM mesmo quando a permissão já
+# está correta: o syscall confere o dono antes de olhar se a mudança seria
+# no-op. Sem sudo, o set -e mata o deploy exatamente aqui — depois das migrations
+# e ANTES do reload do FPM. Com opcache.validate_timestamps=0 isso significa
+# banco migrado e código antigo no ar, com o script aparentando ter funcionado.
+sudo chmod -R g+w storage bootstrap/cache database
 
 # ---------------------------------------------------------------------------
 # 6. Reinício dos processos

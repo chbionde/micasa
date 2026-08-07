@@ -39,12 +39,20 @@ sudo DOMINIO=micasa-bionde.duckdns.org EMAIL_TLS=voce@exemplo.com ./infra/provis
 # 3. Configure a aplicação
 cp infra/env.production.example api/.env
 nano api/.env                      # confira APP_URL, FRONTEND_URL, e-mail
-cd api && php artisan key:generate && cd ..
 
-# 4. Publique
+# 4. Instale as dependências e gere a chave
+#    Nesta ordem: o key:generate roda pelo artisan, que precisa do vendor/.
+cd api
+composer install --no-dev --optimize-autoloader
+php artisan key:generate
+cd ..
+
+# 5. Publique
 ./infra/deploy.sh
 sudo systemctl start micasa-queue
 ```
+
+O `deploy.sh` repete o `composer install` do passo 4 — na segunda vez ele não baixa nada e custa segundos. A repetição é preferível a um deploy que só funciona depois de alguém ter rodado o passo certo à mão.
 
 ## Ensaio fora da VPS
 
@@ -110,6 +118,8 @@ free -h                                            # RAM e swap
 | `502 Bad Gateway` | PHP-FPM caiu. `systemctl status php8.4-fpm` e `free -h` — se a swap estiver cheia, foi memória. |
 | `attempt to write a readonly database` | Falta escrita **no diretório** `api/database`, não no arquivo: o WAL cria `-wal` e `-shm` ao lado. |
 | Deploy passa e o código não muda | Falta `systemctl reload php8.4-fpm`. Com `opcache.validate_timestamps=0` o PHP não percebe arquivo novo. |
+| `chmod: ... Operation not permitted` no deploy | Arquivo criado pelo `www-data` (o log do dia, via cron do scheduler). `chmod` exige ser dono — por isso o `deploy.sh` usa `sudo`. Se você removeu o `sudo`, o deploy morre aí e o FPM não recarrega. |
+| `key:generate` diz que falta `vendor/autoload.php` | Ordem invertida na primeira instalação: o `composer install` vem antes. Ver "Primeira vez", passo 4. |
 | `env()` devolve `null` em produção | `config:cache` já rodou. Fora de `config/`, use `config()`, nunca `env()`. |
 | Login não persiste | `SESSION_DOMAIN` preenchido. Em origem única ele fica vazio. |
 | Certbot falha | DNS ainda não propagou. `dig +short SEU_DOMINIO` e tente de novo. |
