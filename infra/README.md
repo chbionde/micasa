@@ -1,0 +1,93 @@
+# infra/ — provisionamento e deploy
+
+Runbook da VPS do MiCasa. Decisões que embasam este diretório: **ADR-003** (Oracle Always Free, sem PAYG) com a emenda de 2026-08-07 (região Vinhedo, forma AMD `E2.1.Micro`) e **ADR-020** (origem única e fronteira de caminhos).
+
+## O que existe aqui
+
+| Arquivo | Papel |
+|---|---|
+| `provision.sh` | Roda **uma vez** numa VPS nova. Deixa a máquina pronta, sem a aplicação. |
+| `deploy.sh` | Roda **a cada** publicação. Atualiza código, dependências, banco e caches. |
+| `nginx/micasa.conf.template` | Site do nginx. O `provision.sh` substitui os `__PLACEHOLDER__`. |
+| `systemd/micasa-queue.service` | Worker da fila. |
+| `cron/micasa-scheduler` | Entrada única de cron do scheduler do Laravel. |
+| `env.production.example` | Modelo do `api/.env` de produção. |
+
+## Pré-requisitos na nuvem
+
+Feitos no console da Oracle, fora deste script:
+
+- Instância `VM.Standard.E2.1.Micro`, Ubuntu 24.04, em sub-rede **pública**
+- **IP público reservado** (não efêmero) — sem isso o endereço muda quando a instância é parada e religada, e DNS e certificado quebram junto
+- Lista de Segurança da VCN com entrada TCP em **80** e **443**, origem `0.0.0.0/0`
+- DNS apontando para o IP reservado
+
+> Liberar as portas na Lista de Segurança **não basta**. As imagens Ubuntu da Oracle trazem regras `iptables` que descartam tudo além de SSH; quem resolve isso é o `provision.sh`.
+
+## Primeira vez
+
+```bash
+# 1. Clone o repositório no lugar definitivo
+sudo mkdir -p /var/www/micasa
+sudo chown "$USER:www-data" /var/www/micasa
+git clone https://github.com/chbionde/micasa.git /var/www/micasa
+cd /var/www/micasa
+
+# 2. Provisione (fuso, swap, iptables, PHP, nginx, fila, scheduler, TLS)
+sudo DOMINIO=micasa-bionde.duckdns.org EMAIL_TLS=voce@exemplo.com ./infra/provision.sh
+
+# 3. Configure a aplicação
+cp infra/env.production.example api/.env
+nano api/.env                      # confira APP_URL, FRONTEND_URL, e-mail
+cd api && php artisan key:generate && cd ..
+
+# 4. Publique
+./infra/deploy.sh
+sudo systemctl start micasa-queue
+```
+
+## Publicando o front
+
+O `deploy.sh` **não** roda `npm run build`. Vite mais `tsc` não cabem com folga em 1 GB de RAM e 1/8 de OCPU, e um build que mata a máquina por falta de memória é pior que um passo manual.
+
+Construa fora e envie o resultado:
+
+```powershell
+# na sua máquina
+cd web
+npm run build
+scp -i $env:USERPROFILE\.ssh\id_ed25519 -r dist/* ubuntu@SEU_IP:/var/www/micasa/web/dist/
+```
+
+Não é preciso recarregar o nginx: são arquivos estáticos, servidos direto do disco.
+
+> Automatizar isso no GitHub Actions é trabalho de uma issue própria. Enquanto não existir, este é o caminho — e ele funciona.
+
+## Publicações seguintes
+
+```bash
+cd /var/www/micasa && ./infra/deploy.sh
+```
+
+## Verificando
+
+```bash
+curl -sS https://micasa-bionde.duckdns.org/up      # health check do Laravel
+systemctl status micasa-queue                      # worker da fila
+journalctl -u micasa-queue -n 50                   # log do worker
+sudo tail -f /var/log/nginx/error.log              # erros do nginx
+free -h                                            # RAM e swap
+```
+
+## Quando algo quebra
+
+| Sintoma | Causa provável |
+|---|---|
+| Porta 80 dá timeout, console da Oracle "certo" | `iptables` da imagem Ubuntu. Rode o `provision.sh` de novo. |
+| `502 Bad Gateway` | PHP-FPM caiu. `systemctl status php8.4-fpm` e `free -h` — se a swap estiver cheia, foi memória. |
+| `attempt to write a readonly database` | Falta escrita **no diretório** `api/database`, não no arquivo: o WAL cria `-wal` e `-shm` ao lado. |
+| Deploy passa e o código não muda | Falta `systemctl reload php8.4-fpm`. Com `opcache.validate_timestamps=0` o PHP não percebe arquivo novo. |
+| `env()` devolve `null` em produção | `config:cache` já rodou. Fora de `config/`, use `config()`, nunca `env()`. |
+| Login não persiste | `SESSION_DOMAIN` preenchido. Em origem única ele fica vazio. |
+| Certbot falha | DNS ainda não propagou. `dig +short SEU_DOMINIO` e tente de novo. |
+| Rota nova do servidor devolve HTML da SPA | Ela não está na lista de caminhos do nginx. Ver ADR-020. |

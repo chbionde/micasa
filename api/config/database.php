@@ -38,9 +38,13 @@ return [
             'database' => env('DB_DATABASE', database_path('database.sqlite')),
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
-            'busy_timeout' => null,
-            'journal_mode' => null,
-            'synchronous' => null,
+            // PRAGMAs aplicados a cada conexão. Em produção (ver infra/env.production.example):
+            // WAL permite leitura concorrente com escrita, busy_timeout evita
+            // "database is locked" entre FPM, fila e scheduler. Ficam por env para
+            // que os testes continuem no padrão em memória, sem WAL.
+            'busy_timeout' => env('DB_BUSY_TIMEOUT'),
+            'journal_mode' => env('DB_JOURNAL_MODE'),
+            'synchronous' => env('DB_SYNCHRONOUS'),
             'transaction_mode' => 'DEFERRED',
         ],
 

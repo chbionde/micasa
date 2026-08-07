@@ -1,0 +1,10 @@
+# O desenvolvimento é no Windows, mas a VPS é Linux. Um script de shell salvo
+# com fim de linha CRLF falha lá com "\r: command not found" — e a mensagem
+# não diz nada sobre fim de linha, o que torna o erro caro de diagnosticar.
+# Estes arquivos são forçados a LF independentemente de quem os edita.
+
+*.sh                            text eol=lf
+infra/nginx/*                   text eol=lf
+infra/systemd/*                 text eol=lf
+infra/cron/*                    text eol=lf
+infra/env.production.example    text eol=lf

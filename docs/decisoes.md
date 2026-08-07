@@ -193,6 +193,34 @@
 **Decisão (dev, 2026-08-07):** **(a)** — membro comum cria lista, adiciona/edita/remove itens, marca comprado e renomeia/arquiva listas. **Apagar lista é exclusivo de admin.**
 **Consequências:** a distinção admin/membro fica concentrada em gestão de pessoas e em ações destrutivas. `ShoppingListPolicy`: `viewAny`/`view`/`create`/`update` exigem ser membro da casa; `delete` exige admin. Domínios futuros (tarefas, despesas) devem reavaliar o próprio nível — esta decisão vale para listas, não é regra geral.
 
+## ADR-020 (2026-08-07) — Produção em origem única; fronteira de caminhos entre servidor e SPA
+
+**Contexto:** com a VPS de pé (emenda do ADR-003), foi preciso decidir como API e SPA convivem em produção. Em desenvolvimento elas são duas origens (Vite em `:5173`, API em `:8000`) e o CORS + Sanctum já foram exercitados ali. O domínio de produção é `micasa-bionde.duckdns.org` (DuckDNS gratuito, ver emenda do ADR-003), com apenas um hostname confiável — o suporte do DuckDNS a sub-subdomínios não foi verificado.
+
+**Opções:**
+- **(A) Origem única:** um hostname; nginx entrega o build do React e repassa as rotas do servidor ao PHP-FPM. Um certificado, zero CORS, cookie de sessão trivialmente same-site.
+- **(B) Dois hostnames:** `micasa-bionde...` para o front e `api.micasa-bionde...` para a API. Espelha o deploy de mercado (front em CDN, API separada) — objetivo de empregabilidade do ADR-001 — ao custo de CORS, `SESSION_DOMAIN`, dois certificados e uma dependência não verificada do DuckDNS.
+
+**Decisão (dev, 2026-08-07): (A) origem única.** O aprendizado de CORS/Sanctum já foi colhido no ambiente de desenvolvimento, que continua sendo duas origens; carregar isso em produção adicionaria partes móveis sem ganho didático, num servidor de 1 GB de RAM.
+
+**Fronteira de caminhos (contrato que o nginx implementa):**
+
+| Dono | Caminhos |
+|---|---|
+| **Laravel** | `/api/*`, `/sanctum/*`, `/up`, e as 5 rotas de sessão: `/login`, `/register`, `/logout`, `/forgot-password`, `/reset-password` |
+| **SPA** | todo o resto — qualquer caminho não listado cai em `index.html` |
+
+**Colisão encontrada e resolvida:** as rotas de sessão do Laravel vivem na raiz, e o nginx roteia por **caminho, não por método**. `GET /login` (tela da SPA) colidia com `POST /login` (autenticação). As demais não colidiam por acaso: a SPA usa nomes em português (`/registrar`, `/esqueci-senha`) e o Laravel, inglês.
+
+**Opções para a colisão:** (1) mover as 5 rotas de sessão para `/api`, criando fronteira estrutural; (2) renomear a rota de navegação da SPA `/login` → `/entrar`.
+**Decisão (dev, 2026-08-07): (2).** A (1) tiraria as rotas do grupo `web` (com `StartSession`/`VerifyCsrfToken`) para o grupo `api`, onde a sessão depende de `statefulApi()` — mudança em autenticação na véspera do primeiro deploy. A (2) não toca em nenhuma chamada de API e corrige de quebra a única rota da SPA que estava em inglês.
+
+**Consequências:**
+- `GET /` é da SPA. A rota `welcome` do Laravel em `routes/web.php` fica inalcançável em produção — inofensiva, candidata a remoção futura.
+- **Regra permanente:** rota nova do servidor nasce sob `/api`. Rota nova na raiz precisa ser conferida contra o roteador da SPA e registrada aqui.
+- O build do Vite embute `VITE_API_URL` em tempo de compilação; em origem única ele fica **vazio**, e o axios usa caminhos relativos. Trocar de domínio exige recompilar o front — custo já registrado na emenda do ADR-003.
+- (1) continua possível depois, ao mesmo custo de hoje, quando não houver deploy pendente.
+
 ---
 
 ## Decisões adiadas (com gatilho)

@@ -1,0 +1,25 @@
+[Unit]
+Description=MiCasa - worker da fila (driver database)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=__APP_DIR__/api
+
+# --max-time=3600 faz o worker sair sozinho a cada hora e o systemd o reinicia.
+# Isso resolve dois problemas de uma vez: vazamento de memória em processo
+# longo (crítico com 1 GB de RAM) e código novo só entrando em vigor depois de
+# reiniciar o worker — sem isso, um deploy passaria despercebido pela fila.
+ExecStart=/usr/bin/php artisan queue:work --sleep=3 --tries=3 --max-time=3600
+
+Restart=always
+RestartSec=5
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=micasa-queue
+
+[Install]
+WantedBy=multi-user.target
