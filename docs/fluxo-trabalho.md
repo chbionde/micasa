@@ -22,6 +22,12 @@
 5. Merge via **squash** (histórico da `main` fica um commit por tarefa, limpo e navegável).
 6. Exceção pragmática: correções triviais de documentação podem ir direto na `main` — código, nunca.
 
+## Regra: um PR por vez, sem empilhar (decidido em 2026-08-07)
+
+**Não abrir um PR cujo trabalho dependa de outro ainda aberto.** A próxima issue só começa depois que a anterior está mergeada na `main`. O custo é esperar o merge entre issues; o ganho é nunca mais precisar de PR de recuperação — o empilhamento já custou duas.
+
+A seção abaixo fica como registro do que deu errado e por quê, caso o empilhamento volte a ser necessário algum dia.
+
 ## PRs empilhados — cuidado na hora do merge
 
 Quando uma entrega depende de outra ainda em revisão, o segundo PR nasce **com base no primeiro** (não na `main`). Isso é normal e o GitHub avisa na tela do PR.
