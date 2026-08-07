@@ -1,5 +1,6 @@
 import { useAuth } from '../features/auth/auth-context'
 import { ListaMembros } from '../features/households/ListaMembros'
+import { NomeDaCasa } from '../features/households/NomeDaCasa'
 import { PainelConvites } from '../features/households/PainelConvites'
 
 export function CasaPage() {
@@ -18,8 +19,8 @@ export function CasaPage() {
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-xl font-bold text-stone-900">{casa.nome}</h1>
+      <header className="space-y-1">
+        <NomeDaCasa casaId={casa.id} nome={casa.nome} souAdmin={souAdmin} />
         <p className="text-sm text-stone-500">
           Você é {souAdmin ? 'administrador' : 'membro'} desta casa.
         </p>

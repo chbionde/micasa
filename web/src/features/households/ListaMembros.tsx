@@ -14,6 +14,25 @@ export function ListaMembros({ casaId, souAdmin }: Props) {
   if (isError) return <p role="alert" className="text-red-700">Não foi possível carregar os membros.</p>
 
   const erro = alterarPapel.error ?? removerMembro.error
+  const souAUltimaPessoa = membros.length === 1
+
+  function confirmarESair(membro: Membro) {
+    // Sair sendo a última pessoa apaga a casa — o aviso precisa dizer isso
+    // com todas as letras antes de a ação acontecer.
+    const pergunta = membro.sou_eu
+      ? souAUltimaPessoa
+        ? 'Você é a única pessoa nesta casa. Ao sair, a casa e os convites pendentes serão apagados. Tem certeza?'
+        : 'Tem certeza que deseja sair desta casa?'
+      : `Remover ${membro.nome} desta casa?`
+
+    if (!window.confirm(pergunta)) return
+
+    removerMembro.mutate(membro.id, {
+      onSuccess: () => {
+        if (membro.sou_eu) void recarregar()
+      },
+    })
+  }
 
   return (
     <section className="space-y-3">
@@ -58,13 +77,7 @@ export function ListaMembros({ casaId, souAdmin }: Props) {
             {(souAdmin || membro.sou_eu) && (
               <button
                 type="button"
-                onClick={() =>
-                  removerMembro.mutate(membro.id, {
-                    onSuccess: () => {
-                      if (membro.sou_eu) void recarregar()
-                    },
-                  })
-                }
+                onClick={() => confirmarESair(membro)}
                 className="rounded-lg px-2 py-1 text-sm font-medium text-red-700 hover:bg-red-50"
               >
                 {membro.sou_eu ? 'Sair da casa' : 'Remover'}

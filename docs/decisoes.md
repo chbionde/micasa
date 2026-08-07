@@ -62,6 +62,17 @@
 
 **Consequências:** um join a mais em tudo; policies sempre por casa. Cobre cenários reais (membro de duas casas, faxineira em duas casas).
 
+### Emenda (2026-08-06) — pessoa sem casa passa a ser estado válido
+
+**Contexto:** teste de uso real mostrou que quem cria a casa sozinho fica preso nela — a regra do último administrador impedia sair, e não havia como apagar a casa.
+**Decisão:**
+1. O cadastro **continua** criando uma casa (nada muda no registro).
+2. **Casa nunca fica vazia:** se quem sai é o único membro, a casa é apagada junto.
+3. **Pessoa sem casa é estado válido** — ex.: alguém que saiu e aguarda convite. A UI trata `casa_ativa` nula.
+4. A regra do último admin **permanece** quando há outros membros: não dá para sair deixando a casa sem quem administra.
+
+**Consequências:** substitui a frase original "Não existe conta órfã". Toda tela e todo endpoint precisam tolerar usuário sem casa ativa.
+
 ## ADR-008 — Tempo: UTC no banco, timezone por casa, vencimento como data civil
 
 **Contexto:** "hora do servidor" é armadilha — o servidor é descartável (ADR-003). Multi-casa pode cruzar fusos brasileiros (SP UTC-3, Manaus UTC-4).
