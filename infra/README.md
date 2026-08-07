@@ -116,7 +116,7 @@ free -h                                            # RAM e swap
 |---|---|
 | Porta 80 dá timeout, console da Oracle "certo" | `iptables` da imagem Ubuntu. Rode o `provision.sh` de novo. |
 | `502 Bad Gateway` | PHP-FPM caiu. `systemctl status php8.4-fpm` e `free -h` — se a swap estiver cheia, foi memória. |
-| `attempt to write a readonly database` | Falta escrita **no diretório** `api/database`, não no arquivo: o WAL cria `-wal` e `-shm` ao lado. |
+| `attempt to write a readonly database` | O `-wal` e o `-shm` são criados pelo PHP-FPM como `www-data`, e o setgid do diretório só herda o grupo, não o dono. Rode `id -nG` — se o usuário de deploy não estiver em `www-data`, ele só tem leitura neles. O `provision.sh` o adiciona ao grupo, mas **grupo novo só vale em sessão nova**: saia e entre no SSH. O `database.sqlite` estar gravável não descarta esse caso. |
 | Deploy passa e o código não muda | Falta `systemctl reload php8.4-fpm`. Com `opcache.validate_timestamps=0` o PHP não percebe arquivo novo. |
 | `chmod: ... Operation not permitted` no deploy | Arquivo criado pelo `www-data` (o log do dia, via cron do scheduler). `chmod` exige ser dono — por isso o `deploy.sh` usa `sudo`. Se você removeu o `sudo`, o deploy morre aí e o FPM não recarrega. |
 | `key:generate` diz que falta `vendor/autoload.php` | Ordem invertida na primeira instalação: o `composer install` vem antes. Ver "Primeira vez", passo 4. |

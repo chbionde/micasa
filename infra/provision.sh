@@ -225,6 +225,18 @@ find "${APP_DIR}/api/storage" "${APP_DIR}/api/bootstrap/cache" "${APP_DIR}/api/d
   -type d -exec chmod 2775 {} + 2>/dev/null || true
 chmod 2775 "${APP_DIR}"
 
+# O setgid acima faz arquivo novo herdar o GRUPO www-data, mas não o dono. Os
+# arquivos que o PHP-FPM cria — em especial database.sqlite-wal e -shm — nascem
+# www-data:www-data. Sem estar no grupo, o usuário de deploy cai em "outros" e
+# só tem leitura neles: o `php artisan migrate` do deploy.sh quebra com
+# "attempt to write a readonly database", mesmo com o database.sqlite gravável
+# e o diretório 2775. É problema de participação no grupo, não de bits.
+if ! id -nG "${DEPLOY_USER}" | grep -qw www-data; then
+  log "Adicionando ${DEPLOY_USER} ao grupo www-data"
+  usermod -aG www-data "${DEPLOY_USER}"
+  warn "Grupo novo só vale em sessão nova: saia e entre de novo no SSH antes do deploy.sh."
+fi
+
 # ---------------------------------------------------------------------------
 # 7. nginx — origem única (ADR-020)
 # ---------------------------------------------------------------------------

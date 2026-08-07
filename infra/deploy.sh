@@ -21,6 +21,13 @@ erro() { printf '\033[1;31m[erro] %s\033[0m\n' "$*" >&2; exit 1; }
 [[ -f "${APP_DIR}/api/.env" ]] \
   || erro "Falta ${APP_DIR}/api/.env — copie de infra/env.production.example e preencha."
 
+# Sem participação no grupo www-data, o migrate abaixo morre com "attempt to
+# write a readonly database" — porque o PHP-FPM cria database.sqlite-wal como
+# www-data e este usuário só o enxerga como "outros". Vale conferir aqui, com
+# mensagem útil, em vez de deixar o erro aparecer três passos adiante.
+id -nG | grep -qw www-data \
+  || erro "$(id -un) não está no grupo www-data. Rode o provision.sh; se ele já rodou, saia e entre de novo no SSH — grupo novo só vale em sessão nova."
+
 cd "${APP_DIR}"
 
 # ---------------------------------------------------------------------------
