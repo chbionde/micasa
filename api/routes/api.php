@@ -5,6 +5,7 @@ use App\Http\Controllers\HouseholdController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\MemberController;
 use App\Http\Controllers\ShoppingListController;
+use App\Http\Controllers\ShoppingListItemController;
 use App\Http\Resources\UserResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -37,6 +38,13 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/shopping-lists', [ShoppingListController::class, 'store']);
             Route::patch('/shopping-lists/{shopping_list}', [ShoppingListController::class, 'update']);
             Route::delete('/shopping-lists/{shopping_list}', [ShoppingListController::class, 'destroy']);
+
+            Route::prefix('shopping-lists/{shopping_list}')->group(function () {
+                Route::get('/items', [ShoppingListItemController::class, 'index']);
+                Route::post('/items', [ShoppingListItemController::class, 'store']);
+                Route::patch('/items/{item}', [ShoppingListItemController::class, 'update']);
+                Route::delete('/items/{item}', [ShoppingListItemController::class, 'destroy']);
+            });
 
             Route::get('/members', [MemberController::class, 'index']);
             Route::patch('/members/{member}', [MemberController::class, 'update']);
