@@ -124,4 +124,5 @@ free -h                                            # RAM e swap
 | `env()` devolve `null` em produção | `config:cache` já rodou. Fora de `config/`, use `config()`, nunca `env()`. |
 | Login não persiste | `SESSION_DOMAIN` preenchido. Em origem única ele fica vazio. |
 | Certbot falha | DNS ainda não propagou. `dig +short SEU_DOMINIO` e tente de novo. |
+| HTTPS parou depois de rodar o `provision.sh` de novo | O script regenera o conf do nginx a partir do template, que só tem `listen 80`, e o certbot havia escrito o SSL nesse mesmo arquivo. Corrigido: quando o certificado já existe, o script roda `certbot install` para reescrever a configuração. Se ainda acontecer: `sudo certbot install --nginx --cert-name SEU_DOMINIO --redirect`. |
 | Rota nova do servidor devolve HTML da SPA | Ela não está na lista de caminhos do nginx. Ver ADR-020. |

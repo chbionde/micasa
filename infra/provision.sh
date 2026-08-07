@@ -283,16 +283,29 @@ if pular_host; then
   # O desafio HTTP-01 exige que o Let's Encrypt alcance esta máquina pela porta
   # 80, no nome do domínio. Atrás do NAT do WSL isso nunca resolve.
   warn "Certificado TLS: pulado (PULAR_AJUSTES_DE_HOST=1). O site fica em HTTP puro."
-elif [[ ! -d "/etc/letsencrypt/live/${DOMINIO}" ]]; then
-  log "Emitindo certificado TLS"
-  DEBIAN_FRONTEND=noninteractive apt-get install -y certbot python3-certbot-nginx >/dev/null
-  if ! certbot --nginx -d "${DOMINIO}" --non-interactive --agree-tos \
-       -m "${EMAIL_TLS}" --redirect; then
-    warn "Certbot falhou. Causa mais comum: DNS ainda não aponta para este servidor."
-    warn "Confira com:  dig +short ${DOMINIO}  — e rode o provision.sh de novo."
-  fi
 else
-  log "Certificado já existe, pulando"
+  DEBIAN_FRONTEND=noninteractive apt-get install -y certbot python3-certbot-nginx >/dev/null
+
+  if [[ ! -d "/etc/letsencrypt/live/${DOMINIO}" ]]; then
+    log "Emitindo certificado TLS"
+    if ! certbot --nginx -d "${DOMINIO}" --non-interactive --agree-tos \
+         -m "${EMAIL_TLS}" --redirect; then
+      warn "Certbot falhou. Causa mais comum: DNS ainda não aponta para este servidor."
+      warn "Confira com:  dig +short ${DOMINIO}  — e rode o provision.sh de novo."
+    fi
+  else
+    # NÃO basta pular aqui. A seção 7 acabou de regerar o conf do nginx a partir
+    # do template, e o template só tem `listen 80` — as diretivas de SSL que o
+    # certbot havia escrito naquele arquivo foram junto. Pular deixaria o site
+    # em HTTP puro; e como SESSION_SECURE_COOKIE=true, o cookie de sessão não
+    # viaja em HTTP e ninguém consegue autenticar. Foi assim que a segunda
+    # execução deste script derrubou o HTTPS da VPS em 2026-08-07.
+    #
+    # `certbot install` reescreve só a configuração, a partir do certificado que
+    # já está no disco: não fala com o Let's Encrypt e não gasta cota de emissão.
+    log "Reinstalando configuração TLS no nginx"
+    certbot install --nginx --cert-name "${DOMINIO}" --redirect --non-interactive
+  fi
 fi
 
 log "Provisionamento concluído."
