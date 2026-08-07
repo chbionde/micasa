@@ -13,6 +13,11 @@ set -Eeuo pipefail
 
 PHP_VERSION="8.4"
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Produção publica da main. A checagem existe porque o `git pull` abaixo puxa a
+# branch em que o repositório estiver: bastou a VPS ter ficado na branch da PR
+# para o deploy passar a publicar código que não é o da main, sem avisar.
+# Sobrescreva conscientemente (BRANCH_DEPLOY=outra ./infra/deploy.sh) se precisar.
+BRANCH_DEPLOY="${BRANCH_DEPLOY:-main}"
 
 log()  { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
 erro() { printf '\033[1;31m[erro] %s\033[0m\n' "$*" >&2; exit 1; }
@@ -34,6 +39,9 @@ cd "${APP_DIR}"
 # 1. Código
 # ---------------------------------------------------------------------------
 log "Atualizando código"
+ATUAL="$(git rev-parse --abbrev-ref HEAD)"
+[[ "${ATUAL}" == "${BRANCH_DEPLOY}" ]] \
+  || erro "O repositório está na branch '${ATUAL}', e o deploy publica '${BRANCH_DEPLOY}'. Rode 'git checkout ${BRANCH_DEPLOY}' — ou BRANCH_DEPLOY=${ATUAL} se for intencional."
 git pull --ff-only
 
 # ---------------------------------------------------------------------------

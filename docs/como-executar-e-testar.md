@@ -130,6 +130,10 @@ A VPS é uma `VM.Standard.E2.1.Micro` da Oracle Cloud (Vinhedo), com Ubuntu 24.0
 
 ### Publicar
 
+**Merge na `main` publica sozinho** — o workflow `.github/workflows/deploy.yml` builda o front, envia para a VPS e roda o `deploy.sh`. Nada a fazer à mão. Para publicar sem merge, use **Run workflow** na aba Actions.
+
+Se precisar publicar manualmente (a Action fora do ar, por exemplo):
+
 ```bash
 # front (na sua máquina — o build não cabe em 1 GB de RAM)
 cd web && npm run build
@@ -139,6 +143,8 @@ scp -i ~/.ssh/id_ed25519 -r dist/* ubuntu@IP:/var/www/micasa/web/dist/
 ssh -i ~/.ssh/id_ed25519 ubuntu@IP
 cd /var/www/micasa && ./infra/deploy.sh
 ```
+
+O SSH continua necessário para: editar o `.env` de produção, ver log (`journalctl -u micasa-queue`), rodar comando artisan pontual, restaurar backup e mudar infraestrutura. O que a Action elimina é só o deploy rotineiro — que é o que se repete.
 
 ### Ensaiar o provisionamento sem tocar na VPS
 
