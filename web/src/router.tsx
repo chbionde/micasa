@@ -2,6 +2,8 @@ import { createBrowserRouter } from 'react-router'
 import { GuestOnly } from './features/auth/GuestOnly'
 import { RequireAuth } from './features/auth/RequireAuth'
 import { AppLayout } from './layouts/AppLayout'
+import { AceitarConvitePage } from './pages/AceitarConvitePage'
+import { CasaPage } from './pages/CasaPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
@@ -21,7 +23,12 @@ export const router = createBrowserRouter([
     children: [
       {
         element: <AppLayout />,
-        children: [{ path: '/', element: <DashboardPage /> }],
+        children: [
+          { path: '/', element: <DashboardPage /> },
+          { path: '/casa', element: <CasaPage /> },
+          // Exige sessão: quem chega deslogado passa pelo login e volta.
+          { path: '/convite/:token', element: <AceitarConvitePage /> },
+        ],
       },
     ],
   },

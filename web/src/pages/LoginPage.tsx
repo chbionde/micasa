@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 import { CampoTexto } from '../components/CampoTexto'
 import { useAuth } from '../features/auth/auth-context'
 import { getValidationErrors } from '../lib/validation'
@@ -9,6 +9,8 @@ import type { ValidationErrors } from '../lib/validation'
 export function LoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const destino = (location.state as { de?: string } | null)?.de ?? '/'
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -22,7 +24,7 @@ export function LoginPage() {
 
     try {
       await login(email, password)
-      navigate('/', { replace: true })
+      navigate(destino, { replace: true })
     } catch (error) {
       setErros(
         getValidationErrors(error) ?? {
