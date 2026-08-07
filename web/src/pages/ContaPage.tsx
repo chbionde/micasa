@@ -27,7 +27,7 @@ export function ContaPage() {
       <SecaoExcluir
         aoExcluir={async () => {
           await logout()
-          navigate('/login', { replace: true })
+          navigate('/entrar', { replace: true })
         }}
       />
     </div>

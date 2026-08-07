@@ -31,7 +31,7 @@ export function RedefinirSenhaPage() {
         password,
         password_confirmation: confirmacao,
       })
-      navigate('/login', { replace: true })
+      navigate('/entrar', { replace: true })
     } catch (erro) {
       setErros(getValidationErrors(erro) ?? { email: ['Não foi possível redefinir a senha.'] })
     } finally {

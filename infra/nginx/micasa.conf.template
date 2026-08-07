@@ -1,0 +1,95 @@
+# MiCasa — origem única (ADR-020).
+#
+# Um hostname serve os dois lados: o nginx entrega o build do React e repassa
+# ao PHP-FPM apenas os caminhos que pertencem ao Laravel. Sem CORS, sem
+# SESSION_DOMAIN, um certificado só.
+#
+# Gerado por infra/provision.sh a partir deste template — não edite direto em
+# /etc/nginx/sites-available/micasa, a edição se perde no próximo provisionamento.
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name __DOMINIO__;
+
+    # A SPA é a dona da raiz. O Laravel só é alcançado pelos caminhos abaixo.
+    # web/dist é a saída do `npm run build` — o diretório é criado pelo
+    # provision.sh com um index.html provisório para o nginx conseguir subir
+    # antes do primeiro deploy.
+    root __APP_DIR__/web/dist;
+    index index.html;
+
+    charset utf-8;
+    client_max_body_size 8m;
+
+    # A SPA é estática e cabe folgado na compressão; a API responde JSON curto.
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+    gzip_min_length 1024;
+
+    # ARMADILHA DO NGINX: add_header não é aditivo. Um `location` que declare
+    # qualquer add_header próprio DESCARTA todos os herdados daqui — o `always`
+    # não muda isso, ele só decide se o header vale para respostas de erro.
+    # Por isso os três abaixo aparecem repetidos nas duas locations que definem
+    # Cache-Control. Sem a repetição, o HTML e os assets sairiam sem eles, e a
+    # proteção sobraria só nas respostas JSON, que é onde menos importa.
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+    # -----------------------------------------------------------------------
+    # Caminhos do servidor — a fronteira do ADR-020.
+    # -----------------------------------------------------------------------
+    # /api e /sanctum concentram quase tudo. As cinco rotas de sessão vivem na
+    # raiz do Laravel (routes/auth.php) e precisam ser listadas uma a uma.
+    # Rota nova do servidor nasce sob /api; se nascer na raiz, entra aqui E no
+    # ADR-020 — senão o nginx a entrega para a SPA e ela responde HTML.
+    location ~ ^/(api|sanctum|up|login|register|logout|forgot-password|reset-password)(/|$) {
+        root __APP_DIR__/api/public;
+        try_files $uri /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        root __APP_DIR__/api/public;
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php__PHP_VERSION__-fpm-micasa.sock;
+        fastcgi_hide_header X-Powered-By;
+    }
+
+    # -----------------------------------------------------------------------
+    # SPA
+    # -----------------------------------------------------------------------
+    # O Vite versiona o nome dos arquivos com hash de conteúdo, então cache
+    # longo é seguro: arquivo alterado vira nome novo.
+    location ~* \.(js|css|woff2?|png|jpe?g|gif|svg|ico|webp)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        # Repetidos porque o add_header acima descarta os do server. Ver o
+        # comentário lá em cima.
+        add_header X-Content-Type-Options nosniff always;
+        add_header X-Frame-Options DENY always;
+        add_header Referrer-Policy strict-origin-when-cross-origin always;
+        access_log off;
+        try_files $uri =404;
+    }
+
+    # Qualquer outro caminho é rota do React Router: devolve o index.html e o
+    # roteamento acontece no navegador. Sem isto, recarregar /casa dá 404.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # É aqui que o try_files do location / termina, então esta é a location que
+    # serve a página. Sem repetir os headers, o HTML — justamente o que pode ser
+    # posto num iframe — sairia sem X-Frame-Options.
+    location = /index.html {
+        add_header Cache-Control "no-cache";
+        add_header X-Content-Type-Options nosniff always;
+        add_header X-Frame-Options DENY always;
+        add_header Referrer-Policy strict-origin-when-cross-origin always;
+    }
+
+    location ~ /\. {
+        deny all;
+    }
+}

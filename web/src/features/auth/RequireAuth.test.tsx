@@ -21,7 +21,7 @@ function renderRotaPrivada() {
         element: <RequireAuth />,
         children: [{ path: '/', element: <p>conteúdo privado</p> }],
       },
-      { path: '/login', element: <p>tela de login</p> },
+      { path: '/entrar', element: <p>tela de login</p> },
     ],
     { initialEntries: ['/'] },
   )

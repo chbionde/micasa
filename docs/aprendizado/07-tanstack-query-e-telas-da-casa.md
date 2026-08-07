@@ -135,6 +135,8 @@ O trade-off, comentado no próprio arquivo: o padrão do TanStack Query é `stal
 
 ## 8. Retorno pós-login: não perder o convite pelo caminho
 
+> **Nota (2026-08-07):** a rota `/login` citada nesta seção passou a se chamar `/entrar` — ver [doc 09, seção 7](09-vps-oracle-e-deploy.md). O mecanismo descrito aqui não mudou.
+
 Cenário real: alguém recebe um link de convite (`/convite/TOKEN`) sem estar logado. A rota exige sessão (está sob `RequireAuth` no `router.tsx`), então a pessoa é redirecionada para `/login` — mas se o redirecionamento sempre mandasse para `/` depois do login, o convite se perderia no meio do caminho.
 
 `RequireAuth` guarda de onde a pessoa veio antes de redirecionar:

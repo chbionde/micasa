@@ -1,0 +1,16 @@
+# MiCasa - scheduler do Laravel.
+#
+# O Laravel espera uma única entrada de cron por minuto; quem decide o que roda
+# (e com que frequência) é o routes/console.php da aplicação. Por isso aqui
+# nunca deve aparecer mais de uma linha.
+#
+# Roda como www-data para que qualquer arquivo criado pertença ao mesmo dono
+# do PHP-FPM — cron rodando como root produziria log e cache inacessíveis
+# para a aplicação depois.
+#
+# Instalado por infra/provision.sh em /etc/cron.d/micasa-scheduler.
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+* * * * * www-data cd __APP_DIR__/api && /usr/bin/php artisan schedule:run >> /dev/null 2>&1

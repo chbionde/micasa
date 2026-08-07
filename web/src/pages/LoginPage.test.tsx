@@ -36,10 +36,10 @@ function erro422(errors: Record<string, string[]>): AxiosError {
 function renderLogin() {
   const router = createMemoryRouter(
     [
-      { path: '/login', element: <LoginPage /> },
+      { path: '/entrar', element: <LoginPage /> },
       { path: '/', element: <p>área logada</p> },
     ],
-    { initialEntries: ['/login'] },
+    { initialEntries: ['/entrar'] },
   )
 
   render(
