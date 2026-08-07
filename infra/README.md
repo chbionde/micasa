@@ -120,6 +120,7 @@ free -h                                            # RAM e swap
 | Deploy passa e o código não muda | Falta `systemctl reload php8.4-fpm`. Com `opcache.validate_timestamps=0` o PHP não percebe arquivo novo. |
 | `chmod: ... Operation not permitted` no deploy | Arquivo criado pelo `www-data` (o log do dia, via cron do scheduler). `chmod` exige ser dono — por isso o `deploy.sh` usa `sudo`. Se você removeu o `sudo`, o deploy morre aí e o FPM não recarrega. |
 | `key:generate` diz que falta `vendor/autoload.php` | Ordem invertida na primeira instalação: o `composer install` vem antes. Ver "Primeira vez", passo 4. |
+| "Esqueci minha senha" não gera link nenhum no log | `MAIL_MAILER=log` grava em nível DEBUG e `LOG_LEVEL=warning` descarta. Nada quebrou. Ver a receita em `infra/env.production.example`. |
 | `env()` devolve `null` em produção | `config:cache` já rodou. Fora de `config/`, use `config()`, nunca `env()`. |
 | Login não persiste | `SESSION_DOMAIN` preenchido. Em origem única ele fica vazio. |
 | Certbot falha | DNS ainda não propagou. `dig +short SEU_DOMINIO` e tente de novo. |
