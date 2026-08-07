@@ -1,0 +1,99 @@
+name: Deploy
+
+# Publica na VPS a cada merge na main, e sob demanda pelo botão "Run workflow".
+#
+# O build do front acontece AQUI, não no servidor: o Vite + tsc não cabem com
+# folga em 1 GB de RAM (ADR-003), e é por isso que o infra/deploy.sh nunca rodou
+# `npm run build`. O runner do GitHub tem RAM de sobra e resolve isso de graça.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Dois merges seguidos não podem publicar ao mesmo tempo: o segundo esperaria o
+# primeiro terminar. `cancel-in-progress: false` porque abortar um deploy no meio
+# deixaria a VPS com o front novo e o back antigo (ou o contrário).
+concurrency:
+  group: deploy-producao
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    # O ambiente dá um lugar para exigir aprovação manual depois, se quisermos,
+    # e mostra o histórico de publicações na aba Environments.
+    environment:
+      name: producao
+      url: https://micasa-bionde.duckdns.org
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Configurar Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Instalar dependências do front
+        working-directory: web
+        run: npm ci
+
+      # O build roda `tsc -b && vite build`. Se o TypeScript reprovar, o deploy
+      # para aqui — antes de tocar no servidor.
+      - name: Build do front
+        working-directory: web
+        run: npm run build
+
+      # A chave vem do secret e nunca toca o disco do repositório. O known_hosts
+      # é fixado de propósito: com StrictHostKeyChecking=no, a Action aceitaria
+      # qualquer máquina que atendesse naquele IP, e um sequestro de rota
+      # entregaria o deploy — e a chave — a um servidor estranho.
+      - name: Preparar SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Enviar o front
+        env:
+          ALVO: ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}
+        run: |
+          # --delete remove do servidor o que saiu do build. Sem isso, o dist da
+          # VPS vira um acúmulo de assets de versões antigas: o Vite dá nome novo
+          # a cada build (hash de conteúdo), então nada é sobrescrito.
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/id_deploy -o IdentitiesOnly=yes" \
+            web/dist/ "$ALVO:/var/www/micasa/web/dist/"
+
+      - name: Publicar o back
+        env:
+          ALVO: ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}
+        run: |
+          # -o BatchMode=yes: sem tty não há como responder prompt; melhor falhar
+          # do que pendurar o job por seis horas até o timeout.
+          ssh -i ~/.ssh/id_deploy -o IdentitiesOnly=yes -o BatchMode=yes "$ALVO" \
+            'cd /var/www/micasa && ./infra/deploy.sh'
+
+      # O deploy.sh já sai com código != 0 em qualquer falha (set -Eeuo pipefail),
+      # o que reprova o passo acima. Esta verificação pega o caso pior: o deploy
+      # "deu certo" e mesmo assim o site não responde.
+      - name: Verificar a saúde do site
+        run: |
+          for tentativa in 1 2 3 4 5; do
+            codigo=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 \
+              https://micasa-bionde.duckdns.org/up || echo 000)
+            [ "$codigo" = "200" ] && { echo "/up respondeu 200"; exit 0; }
+            echo "tentativa $tentativa: /up devolveu $codigo"
+            sleep 5
+          done
+          echo "::error::O site não respondeu 200 em /up depois do deploy."
+          exit 1
+
+      - name: Limpar credenciais do runner
+        if: always()
+        run: rm -f ~/.ssh/id_deploy

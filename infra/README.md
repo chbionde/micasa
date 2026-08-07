@@ -77,28 +77,41 @@ O que ele **não cobre**:
 | `certbot` | O desafio HTTP-01 precisa alcançar a porta 80 pelo nome do domínio; o WSL está atrás de NAT |
 | Pressão de 1 GB | A máquina de ensaio tem RAM de sobra. O motivo de `ondemand`, do swap e de não buildar o front no servidor não aparece |
 
-## Publicando o front
+## Publicações seguintes — automáticas
 
-O `deploy.sh` **não** roda `npm run build`. Vite mais `tsc` não cabem com folga em 1 GB de RAM e 1/8 de OCPU, e um build que mata a máquina por falta de memória é pior que um passo manual.
+**Merge na `main` publica sozinho.** O workflow `.github/workflows/deploy.yml` builda o front no runner do GitHub, envia `web/dist` por `rsync` e roda o `deploy.sh` na VPS. Para publicar sem um merge, use o botão **Run workflow** na aba Actions.
 
-Construa fora e envie o resultado:
+O `deploy.sh` **não** roda `npm run build`: Vite mais `tsc` não cabem com folga em 1 GB de RAM e 1/8 de OCPU. O build acontece no runner, que tem memória de sobra — foi o que permitiu automatizar sem tocar nessa restrição.
+
+O deploy publica sempre da `main`, e o script recusa rodar em outra branch. Isso não é preciosismo: a VPS ficou na branch da PR depois do primeiro provisionamento, e nesse estado o `git pull` publicaria código que não é o da `main`, em silêncio.
+
+### Publicar à mão, quando precisar
 
 ```bash
-# na sua máquina
-cd web
-npm run build
+# front (na sua máquina)
+cd web && npm run build
 scp -i ~/.ssh/id_ed25519 -r dist/* ubuntu@SEU_IP:/var/www/micasa/web/dist/
-```
 
-Não é preciso recarregar o nginx: são arquivos estáticos, servidos direto do disco.
-
-> Automatizar isso no GitHub Actions é trabalho de uma issue própria. Enquanto não existir, este é o caminho — e ele funciona.
-
-## Publicações seguintes
-
-```bash
+# back (na VPS)
 cd /var/www/micasa && ./infra/deploy.sh
 ```
+
+Não é preciso recarregar o nginx para o front: são arquivos estáticos, servidos direto do disco.
+
+### As credenciais do deploy automático
+
+A Action usa uma chave SSH **dedicada** (`micasa-deploy`), sem passphrase, separada da chave pessoal. A privada vive só nos *Secrets* do repositório; a pública está no `authorized_keys` da VPS com `no-port-forwarding,no-agent-forwarding,no-X11-forwarding`.
+
+Para trocar a chave (se vazar, ou por rotação):
+
+```bash
+ssh-keygen -t ed25519 -N "" -C "micasa-deploy (github actions)" -f /tmp/micasa-deploy
+gh secret set SSH_PRIVATE_KEY < /tmp/micasa-deploy
+# na VPS: substitua a linha correspondente em ~/.ssh/authorized_keys pela nova pública
+rm -f /tmp/micasa-deploy*
+```
+
+**O que essa chave pode fazer:** ela entra como o usuário `ubuntu`, que tem `sudo`. Quem obtiver o conteúdo do secret tem controle da VPS. Reduzir isso para um usuário dedicado com `sudo` restrito aos três comandos do deploy está registrado na issue de segurança.
 
 ## Verificando
 
