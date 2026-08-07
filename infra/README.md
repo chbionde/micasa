@@ -46,17 +46,40 @@ cd api && php artisan key:generate && cd ..
 sudo systemctl start micasa-queue
 ```
 
+## Ensaio fora da VPS
+
+`PULAR_AJUSTES_DE_HOST=1` desliga as quatro seções que só existem por causa da máquina real — fuso, swap, `iptables` e `certbot` — e deixa rodar o resto num WSL ou numa VM descartável. Serve para descobrir erro de digitação e de caminho antes de tocar no servidor.
+
+```bash
+sudo PULAR_AJUSTES_DE_HOST=1 DOMINIO=micasa.localhost ./infra/provision.sh
+```
+
+`EMAIL_TLS` é dispensado nesse modo: ele só alimenta o certbot. Exige systemd (`/etc/wsl.conf` com `[boot] systemd=true`, depois `wsl --shutdown`).
+
+**Nunca use esta variável na VPS.** O que sai dela não é um servidor de produção: sem swap, o FPM cai no primeiro pico; sem a regra de `iptables`, a porta 80 dá timeout; sem certificado, não há HTTPS.
+
+O que o ensaio **cobre**: nginx e o roteamento de origem única do ADR-020, permissões, o WAL criando `-wal`/`-shm`, `composer install`, `migrate`, `config:cache`, a unit da fila e o `deploy.sh` inteiro. É justamente o que falha em silêncio.
+
+O que ele **não cobre**:
+
+| Seção | Por quê |
+|---|---|
+| `iptables` | As regras DROP vêm da imagem Ubuntu da Oracle. Fora dela não há o que corrigir — o "funcionou" é vazio |
+| Swap | O WSL2 gerencia swap na própria VM; `swapon` devolve `Operation not permitted` |
+| `certbot` | O desafio HTTP-01 precisa alcançar a porta 80 pelo nome do domínio; o WSL está atrás de NAT |
+| Pressão de 1 GB | A máquina de ensaio tem RAM de sobra. O motivo de `ondemand`, do swap e de não buildar o front no servidor não aparece |
+
 ## Publicando o front
 
 O `deploy.sh` **não** roda `npm run build`. Vite mais `tsc` não cabem com folga em 1 GB de RAM e 1/8 de OCPU, e um build que mata a máquina por falta de memória é pior que um passo manual.
 
 Construa fora e envie o resultado:
 
-```powershell
+```bash
 # na sua máquina
 cd web
 npm run build
-scp -i $env:USERPROFILE\.ssh\id_ed25519 -r dist/* ubuntu@SEU_IP:/var/www/micasa/web/dist/
+scp -i ~/.ssh/id_ed25519 -r dist/* ubuntu@SEU_IP:/var/www/micasa/web/dist/
 ```
 
 Não é preciso recarregar o nginx: são arquivos estáticos, servidos direto do disco.

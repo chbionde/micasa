@@ -10,22 +10,49 @@
 # Uso (de dentro do repositório já clonado — ver infra/README.md):
 #   sudo DOMINIO=micasa-bionde.duckdns.org EMAIL_TLS=voce@exemplo.com ./infra/provision.sh
 #
+# PULAR_AJUSTES_DE_HOST=1 desliga as quatro seções que só fazem sentido numa VM
+# de verdade (fuso, swap, iptables e certbot). Existe para ensaiar o script no
+# WSL antes de rodá-lo na VPS — ver infra/README.md, "Ensaio fora da VPS".
+# É dívida assumida: código de produção com uma opção que só serve para teste.
+#
 set -Eeuo pipefail
 
 PHP_VERSION="8.4"          # casado com .github/workflows/ci-api.yml
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEPLOY_USER="${SUDO_USER:-ubuntu}"
+PULAR_AJUSTES_DE_HOST="${PULAR_AJUSTES_DE_HOST:-0}"
 
 log()  { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m[aviso] %s\033[0m\n' "$*"; }
 erro() { printf '\033[1;31m[erro] %s\033[0m\n' "$*" >&2; exit 1; }
+
+pular_host() { [[ "${PULAR_AJUSTES_DE_HOST}" == "1" ]]; }
+
+# O aviso aparece duas vezes de propósito — no início e no fim. Quem rolou a
+# tela durante o apt-get precisa reencontrá-lo antes de concluir que provisionou.
+banner_modo_teste() {
+  printf '\n'
+  printf '\033[1;33m%s\033[0m\n' \
+    '===============================================================' \
+    ' ATENÇÃO: PULAR_AJUSTES_DE_HOST=1 — MODO DE ENSAIO' \
+    '' \
+    ' Fuso horário, swap, iptables e certbot NÃO são aplicados.' \
+    ' O que sai daqui NÃO é um servidor de produção válido.' \
+    ' Nunca use esta variável na VPS.' \
+    '==============================================================='
+  printf '\n'
+}
 
 # ---------------------------------------------------------------------------
 # 0. Pré-condições
 # ---------------------------------------------------------------------------
 [[ $EUID -eq 0 ]] || erro "Rode com sudo."
 [[ -n "${DOMINIO:-}"   ]] || erro "Informe DOMINIO=seu.dominio (ex.: micasa-bionde.duckdns.org)."
-[[ -n "${EMAIL_TLS:-}" ]] || erro "Informe EMAIL_TLS=voce@exemplo.com (avisos de expiração do certificado)."
+# EMAIL_TLS só alimenta o certbot. Sem certbot, exigi-lo obrigaria a inventar um
+# endereço falso no ensaio — e endereço falso num script de produção vira hábito.
+if ! pular_host; then
+  [[ -n "${EMAIL_TLS:-}" ]] || erro "Informe EMAIL_TLS=voce@exemplo.com (avisos de expiração do certificado)."
+fi
 [[ -d "${APP_DIR}/api" && -d "${APP_DIR}/web" ]] \
   || erro "Não achei api/ e web/ em ${APP_DIR}. Rode o script de dentro do repositório clonado."
 
@@ -35,14 +62,20 @@ echo "    aplicação: ${APP_DIR}"
 echo "    PHP:      ${PHP_VERSION}"
 echo "    deploy:   ${DEPLOY_USER}"
 
+if pular_host; then banner_modo_teste; fi
+
 # ---------------------------------------------------------------------------
 # 1. Fuso horário: UTC
 # ---------------------------------------------------------------------------
 # ADR-008 fixou UTC no banco. Manter o servidor também em UTC elimina uma
 # classe inteira de bug: log, cron e banco passam a falar a mesma hora.
 # A conversão para America/Sao_Paulo acontece na borda, dentro do Laravel.
-log "Fuso horário do servidor -> UTC"
-timedatectl set-timezone UTC
+if pular_host; then
+  warn "Fuso horário: pulado (PULAR_AJUSTES_DE_HOST=1)."
+else
+  log "Fuso horário do servidor -> UTC"
+  timedatectl set-timezone UTC
+fi
 
 # ---------------------------------------------------------------------------
 # 2. Swap
@@ -50,7 +83,11 @@ timedatectl set-timezone UTC
 # 1 GB de RAM sem swap derruba o PHP-FPM no primeiro pico. 2 GB de swap é rede
 # de proteção, não memória de trabalho — daí o swappiness baixo, para o kernel
 # só recorrer ao disco quando realmente faltar RAM.
-if [[ ! -f /swapfile ]]; then
+if pular_host; then
+  # O WSL2 gerencia o swap na própria VM; swapon aqui devolve "Operation not
+  # permitted" e derrubaria o script no set -e, sem nada a ver com o código.
+  warn "Swap: pulado (PULAR_AJUSTES_DE_HOST=1)."
+elif [[ ! -f /swapfile ]]; then
   log "Criando 2 GB de swap"
   fallocate -l 2G /swapfile
   chmod 600 /swapfile
@@ -69,16 +106,22 @@ fi
 # ARMADILHA DA ORACLE: as imagens Ubuntu da OCI vêm com regras iptables que
 # descartam tudo além de SSH. Liberar 80/443 na Lista de Segurança do console
 # NÃO basta — sem isto aqui, a porta 80 dá timeout com tudo "certo" na nuvem.
-log "Liberando 80/443 no iptables"
-DEBIAN_FRONTEND=noninteractive apt-get install -y iptables-persistent >/dev/null
+if pular_host; then
+  # Fora da imagem da Oracle não existem as regras DROP que esta seção corrige.
+  # Rodar aqui daria um "funcionou" que não prova nada sobre a VPS.
+  warn "iptables: pulado (PULAR_AJUSTES_DE_HOST=1)."
+else
+  log "Liberando 80/443 no iptables"
+  DEBIAN_FRONTEND=noninteractive apt-get install -y iptables-persistent >/dev/null
 
-for porta in 80 443; do
-  if ! iptables -C INPUT -p tcp --dport "$porta" -m conntrack --ctstate NEW -j ACCEPT 2>/dev/null; then
-    # -I INPUT 1 insere no topo, antes da regra REJECT que fecha a cadeia.
-    iptables -I INPUT 1 -p tcp --dport "$porta" -m conntrack --ctstate NEW -j ACCEPT
-  fi
-done
-netfilter-persistent save >/dev/null
+  for porta in 80 443; do
+    if ! iptables -C INPUT -p tcp --dport "$porta" -m conntrack --ctstate NEW -j ACCEPT 2>/dev/null; then
+      # -I INPUT 1 insere no topo, antes da regra REJECT que fecha a cadeia.
+      iptables -I INPUT 1 -p tcp --dport "$porta" -m conntrack --ctstate NEW -j ACCEPT
+    fi
+  done
+  netfilter-persistent save >/dev/null
+fi
 
 # ---------------------------------------------------------------------------
 # 4. Pacotes
@@ -224,7 +267,11 @@ systemctl enable micasa-queue.service >/dev/null
 # ---------------------------------------------------------------------------
 # Depende de o DNS já apontar para esta máquina: o desafio HTTP-01 do
 # Let's Encrypt bate na porta 80 deste servidor, pelo nome do domínio.
-if [[ ! -d "/etc/letsencrypt/live/${DOMINIO}" ]]; then
+if pular_host; then
+  # O desafio HTTP-01 exige que o Let's Encrypt alcance esta máquina pela porta
+  # 80, no nome do domínio. Atrás do NAT do WSL isso nunca resolve.
+  warn "Certificado TLS: pulado (PULAR_AJUSTES_DE_HOST=1). O site fica em HTTP puro."
+elif [[ ! -d "/etc/letsencrypt/live/${DOMINIO}" ]]; then
   log "Emitindo certificado TLS"
   DEBIAN_FRONTEND=noninteractive apt-get install -y certbot python3-certbot-nginx >/dev/null
   if ! certbot --nginx -d "${DOMINIO}" --non-interactive --agree-tos \
@@ -237,6 +284,10 @@ else
 fi
 
 log "Provisionamento concluído."
+
+# Sem certbot não há redirect para 443: no ensaio a saúde responde em HTTP puro.
+if pular_host; then ESQUEMA=http; else ESQUEMA=https; fi
+
 cat <<EOF
 
 Próximos passos:
@@ -246,6 +297,8 @@ Próximos passos:
   2. Publique a aplicação:
        ${APP_DIR}/infra/deploy.sh
   3. Confira a saúde:
-       curl -sS https://${DOMINIO}/up
+       curl -sS ${ESQUEMA}://${DOMINIO}/up
 
 EOF
+
+if pular_host; then banner_modo_teste; fi
