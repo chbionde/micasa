@@ -17,7 +17,7 @@ export const router = createBrowserRouter([
   {
     element: <GuestOnly />,
     children: [
-      { path: '/login', element: <LoginPage /> },
+      { path: '/entrar', element: <LoginPage /> },
       { path: '/registrar', element: <RegisterPage /> },
       { path: '/esqueci-senha', element: <EsqueciSenhaPage /> },
       { path: '/redefinir-senha/:token', element: <RedefinirSenhaPage /> },

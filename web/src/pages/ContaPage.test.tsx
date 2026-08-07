@@ -32,7 +32,7 @@ function renderConta() {
   renderComRotas(
     [
       { path: '/conta', element: <ContaPage /> },
-      { path: '/login', element: <p>tela de login</p> },
+      { path: '/entrar', element: <p>tela de login</p> },
     ],
     '/conta',
   )

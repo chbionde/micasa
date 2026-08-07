@@ -35,7 +35,7 @@ export function EsqueciSenhaPage() {
         {mensagem !== null ? (
           <div className="space-y-4 rounded-2xl border border-stone-200 bg-white p-6">
             <p className="text-stone-700">{mensagem}</p>
-            <Link to="/login" className="block text-center font-medium text-emerald-700 hover:underline">
+            <Link to="/entrar" className="block text-center font-medium text-emerald-700 hover:underline">
               Voltar para entrar
             </Link>
           </div>
@@ -70,7 +70,7 @@ export function EsqueciSenhaPage() {
         )}
 
         <p className="mt-4 text-center text-sm text-stone-600">
-          <Link to="/login" className="font-medium text-emerald-700 hover:underline">
+          <Link to="/entrar" className="font-medium text-emerald-700 hover:underline">
             Lembrei minha senha
           </Link>
         </p>

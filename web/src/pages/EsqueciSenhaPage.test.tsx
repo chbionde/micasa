@@ -50,7 +50,7 @@ describe('RedefinirSenhaPage', () => {
     renderComRotas(
       [
         { path: '/redefinir-senha/:token', element: <RedefinirSenhaPage /> },
-        { path: '/login', element: <p>tela de login</p> },
+        { path: '/entrar', element: <p>tela de login</p> },
       ],
       '/redefinir-senha/token-abc?email=carlos%40exemplo.com.br',
     )
