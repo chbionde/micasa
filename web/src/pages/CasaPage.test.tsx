@@ -13,6 +13,7 @@ vi.mock('../lib/api', async () => {
 const apiGet = vi.mocked(api.get)
 const apiPost = vi.mocked(api.post)
 const apiPatch = vi.mocked(api.patch)
+const apiDelete = vi.mocked(api.delete)
 
 const CASA = { id: 7, nome: 'Casa de Carlos', fuso: 'America/Sao_Paulo', meu_papel: 'admin' }
 const MEMBROS = [
@@ -108,6 +109,53 @@ describe('CasaPage', () => {
     const aviso = await screen.findByText(/aparece só agora/i)
     expect(aviso).toBeInTheDocument()
     expect(screen.getByText(/\/convite\/token-secreto-123$/)).toBeInTheDocument()
+  })
+
+  it('admin renomeia a casa', async () => {
+    const user = userEvent.setup()
+    mockarApi()
+    apiPatch.mockResolvedValue({ data: { data: { ...CASA, nome: 'Apê da Praia' } } })
+    renderCasa()
+
+    await user.click(await screen.findByRole('button', { name: 'Renomear' }))
+    const campo = screen.getByLabelText('Nome da casa')
+    await user.clear(campo)
+    await user.type(campo, 'Apê da Praia')
+    await user.click(screen.getByRole('button', { name: 'Salvar' }))
+
+    expect(apiPatch).toHaveBeenCalledWith('/api/households/7', { nome: 'Apê da Praia' })
+  })
+
+  it('membro comum não vê o botão de renomear', async () => {
+    mockarApi('member')
+    renderCasa()
+
+    expect(await screen.findByText('Maria')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Renomear' })).not.toBeInTheDocument()
+  })
+
+  it('avisa que a casa será apagada antes de sair sozinho', async () => {
+    const user = userEvent.setup()
+    // Casa com uma pessoa só: sair apaga a casa.
+    apiGet.mockImplementation((url: string) => {
+      if (url === '/api/user') {
+        return Promise.resolve({
+          data: { data: { id: 1, name: 'Carlos', email: 'c@e.com', casa_ativa: CASA } },
+        })
+      }
+      if (url.endsWith('/members')) return Promise.resolve({ data: { data: [MEMBROS[0]] } })
+      if (url.endsWith('/invitations')) return Promise.resolve({ data: { data: [] } })
+      return Promise.reject(new Error('não mockado'))
+    })
+    const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    renderCasa()
+
+    await user.click(await screen.findByRole('button', { name: 'Sair da casa' }))
+
+    expect(confirmar).toHaveBeenCalledWith(expect.stringContaining('a casa e os convites pendentes serão apagados'))
+    // Recusou a confirmação: nada foi enviado.
+    expect(apiDelete).not.toHaveBeenCalled()
+    confirmar.mockRestore()
   })
 
   it('avisa quando não há casa ativa', async () => {

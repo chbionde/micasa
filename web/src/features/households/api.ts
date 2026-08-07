@@ -33,6 +33,11 @@ export async function trocarCasaAtiva(householdId: number): Promise<User> {
   return data.data
 }
 
+export async function renomearCasa(householdId: number, nome: string): Promise<Household> {
+  const { data } = await api.patch<Envelope<Household>>(`/api/households/${householdId}`, { nome })
+  return data.data
+}
+
 export async function buscarMembros(householdId: number): Promise<Membro[]> {
   const { data } = await api.get<Envelope<Membro[]>>(`/api/households/${householdId}/members`)
   return data.data
