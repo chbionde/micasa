@@ -26,6 +26,27 @@
 **Decisão:** Oracle Always Free **sem** upgrade PAYG. Risco de cobrança: zero (faturamento inexiste na conta free).
 **Consequências:** a VM é descartável; os dados não. Mitigações obrigatórias na Fatia 0: backup off-site cifrado (ADR-009) + script de provisionamento documentado. **Plano B registrado:** se a fricção da Oracle (capacidade/recuperação) consumir mais de 2 semanas de trabalho, migrar para Hostinger KVM 1 (cobrança em reais). Código agnóstico de banco e de host para a migração custar uma tarde.
 
+### Emenda (2026-08-07) — Região Vinhedo e shape AMD; correção do critério de ociosidade
+
+**Contexto:** o dev partiu para criar a conta e precisou fechar duas escolhas que o ADR-003 deixou em aberto: **região** (irreversível — a *home region* é definida na criação da conta e recursos Always Free só existem nela) e **shape**. Descartou São Paulo por disputa de capacidade. Verificação na documentação oficial da Oracle (2026-08-07) trouxe fatos novos e corrigiu um erro do próprio ADR-003.
+
+**Correção de fato do ADR-003:** onde se lê "recuperação de instância ociosa (<10% CPU/rede por 7 dias)", o critério oficial é **20%**, e são **três** condições simultâneas ao longo de 7 dias: CPU no 95º percentil < 20%, rede < 20% e memória < 20% — sendo que **memória só se aplica a shapes A1**. Consequência prática invertida em relação ao que se supunha: a micro AMD é avaliada por **duas** condições em vez de três, portanto é **mais** suscetível a ser marcada ociosa, não menos.
+
+**Decisão (dev, 2026-08-07):**
+1. **Home region: `sa-vinhedo-1` (Brazil Southeast).** Mesma latência prática de São Paulo (~100 km), fila de capacidade historicamente menor. Irreversível.
+2. **Shape da v1 do MiCasa: 1× `VM.Standard.E2.1.Micro`** (AMD, 1/8 OCPU com burst, 1 GB RAM). Cota de AMD e de ARM são **separadas**: usar a micro não consome nada do Ampere.
+3. **Segunda micro AMD** (a cota permite duas) reservada como **alvo do teste de restauração** do ADR-009 — sem uma segunda máquina não há onde provar que o backup restaura.
+4. Continua valendo o ADR-003: **sem PAYG**.
+
+**Consequências analisadas:**
+- **Desbloqueio:** produção deixa de depender da fila do Ampere. Fatias 0, 1 e 1.5 podem finalmente fechar o item "está em produção" do Definition of Done, que estava em aberto desde o início.
+- **Recuperabilidade > imunidade:** a micro AMD *pode* ser recuperada por ociosidade. A vantagem sobre a A1 não é escapar disso, é que religar depende de capacidade disponível — que existe para E2.1.Micro e é justamente o que falta na A1. Na A1, "parada" pode virar "parada por semanas".
+- **Restrição de 1 GB:** `composer install` e `npm run build` **não rodam na VPS**. O CI publica o artefato pronto. Isso já era o desenho correto; agora é obrigatório. Swap configurado no provisionamento.
+- **Issue #3:** o script de provisionamento passa a mirar **amd64**. Custo de portar para arm64 depois é ~duas linhas (Ubuntu e o PPA do ondrej cobrem as duas arquiteturas) — não é decisão irreversível, ao contrário da região.
+- **Prazo externo:** a partir de **18/08/2026** a Oracle passa a aplicar o limite Ampere de 2 OCPU/12 GB e **termina automaticamente** instâncias acima da cota. Não criar A1 de 4 OCPU/24 GB — configuração que existia até jun/2026 e ainda aparece em tutoriais.
+- **Fora do escopo do MiCasa:** os 2 OCPU/12 GB de Ampere seguem disponíveis para outros projetos do dev, sem interferir nesta decisão.
+- **O que NÃO muda:** ADR-009 (backup cifrado) e o plano B da Hostinger continuam intactos. Se a micro AMD se mostrar insuficiente ou instável, o gatilho de 2 semanas do ADR-003 dispara igual.
+
 ## ADR-004 — Autenticação: e-mail + senha; Google adiado
 
 **Contexto:** Fatia 0 exige auth. Ideia inicial do dev era "login com Gmail". Esclarecido: login Google e sincronização com Google Agenda são decisões independentes (scopes separados, autorização incremental possível depois).
