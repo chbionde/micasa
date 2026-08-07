@@ -47,6 +47,14 @@ class Household extends Model
         return $this->hasMany(Invitation::class);
     }
 
+    /**
+     * @return HasMany<ShoppingList, $this>
+     */
+    public function shoppingLists(): HasMany
+    {
+        return $this->hasMany(ShoppingList::class);
+    }
+
     /** Papel de um usuário nesta casa, ou null se não for membro. */
     public function roleOf(User $user): ?HouseholdRole
     {
