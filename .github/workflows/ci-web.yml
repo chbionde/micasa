@@ -1,18 +1,16 @@
 name: CI Web
 
+# SEM filtro de `paths:`, de propósito — a justificativa completa está no
+# ci-api.yml e na issue #47. Resumo: PR que não toca `web/` não disparava check
+# nenhum, o que impedia exigir status check na `main`. Este workflow leva 25–43 s.
 on:
   push:
     branches: [main]
-    paths:
-      - "web/**"
-      - ".github/workflows/ci-web.yml"
   pull_request:
-    paths:
-      - "web/**"
-      - ".github/workflows/ci-web.yml"
 
 jobs:
-  quality:
+  # Era `quality`, igual ao do ci-api.yml — dois checks com o mesmo nome.
+  web:
     runs-on: ubuntu-latest
     defaults:
       run:

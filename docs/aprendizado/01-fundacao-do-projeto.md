@@ -123,13 +123,30 @@ expect(button).toHaveTextContent('Count is 1')
 
 **Detalhe de monorepo:** cada workflow tem um **filtro de path** — mudou só `api/**`, roda só o pipeline PHP; mudou só `web/**`, roda só o de front. Economiza minutos de máquina e dá feedback mais rápido.
 
+> ### Correção (2026-08-10) — o filtro de path foi removido, e a lição é outra
+>
+> O parágrafo acima descreve o que foi feito em agosto de 2026 e **estava errado como recomendação**. Fica aqui em vez de ser apagado, porque o erro ensina mais que o acerto.
+>
+> **O que acontece de verdade:** uma PR que toca só `docs/`, `infra/` ou `.github/` não casa com `api/**` nem com `web/**` — e então **não dispara workflow nenhum**. Ela não fica "verde": fica *sem check*. Foi o caso da PR #46, que só mexia em `infra/` e reportou `no checks reported`.
+>
+> Isso destrói a garantia principal do CI. Quando você tenta proteger a branch principal exigindo "só mergeia com check verde", o GitHub passa a esperar um check que **nunca vai chegar**, e a PR trava para sempre. O filtro torna impossível a regra que dá sentido ao CI.
+>
+> **A conta que ninguém tinha feito:** os workflows deste projeto levam de 25 a 43 segundos. O filtro economizava meio minuto por PR, numa conta gratuita onde repositório público não consome cota. Meio minuto em troca de não poder exigir CI verde é um péssimo negócio — e o problema ficou escondido por meses porque, até então, toda PR por acaso tocava `api/` ou `web/`.
+>
+> **A lição transferível:** otimização que economiza segundos e enfraquece uma garantia raramente compensa. E o modo de falha aqui é do tipo pior — silencioso: nada quebra, nada fica vermelho, o check simplesmente não existe, e quem olha rápido vê uma PR sem problema algum.
+>
+> Detalhe menor da mesma correção: os dois workflows chamavam o job de `quality`, o que produzia dois checks com nome idêntico e tornava ambígua qualquer regra que citasse "o check `quality`". Viraram `api` e `web`. **Nome de job é interface pública** — é por ele que a proteção de branch se refere ao check.
+>
+> Ver a issue #47.
+
 **Como replicar (estrutura mínima de um workflow):**
 ```yaml
 on:
   push:
-    paths: ["api/**"]          # só roda se algo aqui mudou
+    branches: [main]           # sem filtro de paths: ver a correção acima
+  pull_request:
 jobs:
-  quality:
+  api:                         # nome do job = nome do check; use nomes distintos
     runs-on: ubuntu-latest     # máquina Linux do GitHub
     steps:
       - uses: actions/checkout@v5        # baixa o código
