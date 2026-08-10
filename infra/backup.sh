@@ -92,8 +92,14 @@ fi
 # quebrado — e é melhor parar ruidosamente do que cifrar com ela.
 [[ "${AGE_RECIPIENT}" == age1* ]] \
   || erro "BACKUP_AGE_RECIPIENT não parece uma chave pública age (deve começar com 'age1')."
-grep -q 'AGE-SECRET-KEY' "${ENV_FILE}" \
-  && erro "Há uma chave PRIVADA age no .env. A VPS só pode conter a pública — ver ADR-009."
+# Comentários são removidos ANTES da busca. A primeira versão disto varria o
+# arquivo inteiro e acusava chave privada por causa do comentário do
+# env.production.example, que cita 'AGE-SECRET-KEY' ao explicar esta própria
+# verificação. O guarda acusava a documentação dele mesmo, em toda instalação
+# nova. Ver #4.
+if grep -vE '^[[:space:]]*#' "${ENV_FILE}" | grep -q 'AGE-SECRET-KEY'; then
+  erro "Há uma chave PRIVADA age no .env. A VPS só pode conter a pública — ver ADR-009."
+fi
 
 for prog in sqlite3 gzip age curl sha1sum python3; do
   command -v "${prog}" >/dev/null || erro "Falta o programa '${prog}'. Rode o infra/provision.sh."

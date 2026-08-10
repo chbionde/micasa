@@ -26,6 +26,13 @@ erro() { printf '\033[1;31m[erro] %s\033[0m\n' "$*" >&2; exit 1; }
 [[ -f "${APP_DIR}/api/.env" ]] \
   || erro "Falta ${APP_DIR}/api/.env — copie de infra/env.production.example e preencha."
 
+# O .env nasce de um `cp` feito à mão e herda o umask de quem copiou — na VPS
+# saiu 664, legível por qualquer usuário da máquina. Ele guarda APP_KEY e as
+# credenciais do B2, então 640 é o certo: dono lê e escreve, o grupo www-data
+# lê (o PHP-FPM precisa), e mais ninguém. Aplicado a cada deploy porque
+# permissão que depende de alguém lembrar volta a errar sozinha.
+chmod 640 "${APP_DIR}/api/.env"
+
 # Sem participação no grupo www-data, o migrate abaixo morre com "attempt to
 # write a readonly database" — porque o PHP-FPM cria database.sqlite-wal como
 # www-data e este usuário só o enxerga como "outros". Vale conferir aqui, com
