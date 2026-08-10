@@ -56,7 +56,7 @@ O `deploy.sh` repete o `composer install` do passo 4 — na segunda vez ele não
 
 ## Ensaio fora da VPS
 
-`PULAR_AJUSTES_DE_HOST=1` desliga as quatro seções que só existem por causa da máquina real — fuso, swap, `iptables` e `certbot` — e deixa rodar o resto num WSL ou numa VM descartável. Serve para descobrir erro de digitação e de caminho antes de tocar no servidor.
+`PULAR_AJUSTES_DE_HOST=1` desliga as cinco seções que só existem por causa da máquina real — fuso, swap, `iptables`, `fail2ban` e `certbot` — e deixa rodar o resto num WSL ou numa VM descartável. Serve para descobrir erro de digitação e de caminho antes de tocar no servidor.
 
 ```bash
 sudo PULAR_AJUSTES_DE_HOST=1 DOMINIO=micasa.localhost ./infra/provision.sh
@@ -73,6 +73,7 @@ O que ele **não cobre**:
 | Seção | Por quê |
 |---|---|
 | `iptables` | As regras DROP vêm da imagem Ubuntu da Oracle. Fora dela não há o que corrigir — o "funcionou" é vazio |
+| `fail2ban` | A jail insere regra no `iptables` real e só tem o que banir numa máquina exposta à internet. No WSL o serviço subiria falhando |
 | Swap | O WSL2 gerencia swap na própria VM; `swapon` devolve `Operation not permitted` |
 | `certbot` | O desafio HTTP-01 precisa alcançar a porta 80 pelo nome do domínio; o WSL está atrás de NAT |
 | Pressão de 1 GB | A máquina de ensaio tem RAM de sobra. O motivo de `ondemand`, do swap e de não buildar o front no servidor não aparece |
@@ -121,7 +122,10 @@ systemctl status micasa-queue                      # worker da fila
 journalctl -u micasa-queue -n 50                   # log do worker
 sudo tail -f /var/log/nginx/error.log              # erros do nginx
 free -h                                            # RAM e swap
+sudo fail2ban-client status sshd                   # IPs banidos no SSH
 ```
+
+**O fail2ban só está funcionando se houver banimento.** A máquina recebe centenas de tentativas de SSH por dia, então `Currently banned: 0` logo após subir é sinal de que a jail não está lendo o journal — não de que a internet ficou educada. `sudo fail2ban-client get sshd bantime` deve devolver `3600`; se devolver `600`, o `jail.d/micasa.local` não foi lido.
 
 ## Quando algo quebra
 
@@ -139,3 +143,5 @@ free -h                                            # RAM e swap
 | Certbot falha | DNS ainda não propagou. `dig +short SEU_DOMINIO` e tente de novo. |
 | HTTPS parou depois de rodar o `provision.sh` de novo | O script regenera o conf do nginx a partir do template, que só tem `listen 80`, e o certbot havia escrito o SSL nesse mesmo arquivo. Corrigido: quando o certificado já existe, o script roda `certbot install` para reescrever a configuração. Se ainda acontecer: `sudo certbot install --nginx --cert-name SEU_DOMINIO --redirect`. |
 | Rota nova do servidor devolve HTML da SPA | Ela não está na lista de caminhos do nginx. Ver ADR-020. |
+| Seu IP levou ban no SSH | `sudo fail2ban-client set sshd unbanip SEU_IP`. O ban expira sozinho em 1 h. Se persistir depois disso, um `netfilter-persistent save` gravou a regra em disco com o fail2ban no ar — a seção 3 do `provision.sh` existe para impedir isso. |
+| `fail2ban-client status sshd` diz `Currently banned: 0` | A jail não está lendo o journal. Confira `sudo fail2ban-client get sshd bantime` (tem de ser `3600`) e `journalctl -u fail2ban -n 30`. Numa máquina exposta, zero banimento é defeito, não sorte. |
