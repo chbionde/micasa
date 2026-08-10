@@ -124,11 +124,48 @@ trap limpar EXIT
 json_campo() {
   python3 -c '
 import sys, json
-d = json.load(sys.stdin)
-for chave in sys.argv[1].split("."):
-    d = d[chave]
+try:
+    d = json.load(sys.stdin)
+    for chave in sys.argv[1].split("."):
+        d = d[chave]
+except Exception as e:
+    sys.stderr.write("campo %s ausente na resposta do B2 (%s)\n" % (sys.argv[1], type(e).__name__))
+    sys.exit(3)
 print(d)
 ' "$1"
+}
+
+# As capacidades da chave são INFORMATIVAS: servem para o dev confirmar que a
+# chave é mesmo Write Only. Não são requisito para o backup funcionar, então uma
+# mudança de formato na API do B2 não pode derrubar o backup — foi o que aconteceu
+# na primeira versão, que assumia `allowed` na raiz e morria com KeyError.
+#
+# O caminho varia entre versões da API (v3 punha capabilities dentro de
+# apiInfo.storageApi; a v4 introduziu um objeto `allowed`), então tenta os
+# candidatos conhecidos e desiste em silêncio se nenhum servir.
+b2_capacidades() {
+  python3 -c '
+import sys, json
+d = json.load(sys.stdin)
+candidatos = (
+    ("apiInfo", "storageApi", "allowed", "capabilities"),
+    ("allowed", "capabilities"),
+    ("apiInfo", "storageApi", "capabilities"),
+)
+for caminho in candidatos:
+    no = d
+    try:
+        for chave in caminho:
+            no = no[chave]
+        print(",".join(no))
+        sys.exit(0)
+    except (KeyError, TypeError):
+        continue
+# Nada encontrado: mostra só os NOMES das chaves, nunca os valores — a resposta
+# carrega o authorizationToken.
+sys.stderr.write("estrutura inesperada; chaves na raiz: %s\n" % ", ".join(d.keys()))
+sys.exit(3)
+'
 }
 
 b2_autorizar() {
@@ -142,12 +179,10 @@ b2_autorizar() {
   B2_TOKEN="$(printf '%s' "${resposta}" | json_campo authorizationToken)"
   B2_API_URL="$(printf '%s' "${resposta}" | json_campo apiInfo.storageApi.apiUrl)"
 
-  # A v4 devolve o que a chave PODE fazer. Melhor conferir aqui, uma vez, do que
-  # descobrir no dia da restauração que ela não era a chave que se pensava.
-  B2_CAPACIDADES="$(printf '%s' "${resposta}" \
-    | python3 -c 'import sys,json; print(",".join(json.load(sys.stdin)["allowed"]["capabilities"]))')"
-
   [[ -n "${B2_TOKEN}" && -n "${B2_API_URL}" ]] || erro "Resposta do b2_authorize_account sem token ou apiUrl."
+
+  # Informativo: se não der para ler, segue em frente. Ver b2_capacidades().
+  B2_CAPACIDADES="$(printf '%s' "${resposta}" | b2_capacidades || true)"
 }
 
 b2_enviar() {
@@ -186,17 +221,27 @@ b2_enviar() {
 if [[ "${MODO_TESTE}" -eq 1 ]]; then
   log "Modo de teste: validando credenciais e upload, sem tocar no banco."
   b2_autorizar
-  log "Autorização OK. Capacidades desta chave: ${B2_CAPACIDADES}"
 
-  case ",${B2_CAPACIDADES}," in
-    *,writeFiles,*) : ;;
-    *) erro "A chave não tem 'writeFiles'. Ela não consegue subir backup nenhum." ;;
-  esac
-  case ",${B2_CAPACIDADES}," in
-    *,deleteFiles,*)
-      log "AVISO: esta chave tem 'deleteFiles'. O desenho da #4 supõe Write Only —"
-      log "       com deleteFiles, quem invadir a VPS apaga o histórico de backups." ;;
-  esac
+  # A prova de que a chave escreve é o upload lá embaixo dar certo, não este
+  # campo. Por isso nada aqui interrompe o teste: se o formato da resposta mudar,
+  # perde-se o relatório, não a verificação.
+  if [[ -n "${B2_CAPACIDADES}" ]]; then
+    log "Autorização OK. Capacidades desta chave: ${B2_CAPACIDADES}"
+
+    case ",${B2_CAPACIDADES}," in
+      *,writeFiles,*) : ;;
+      *) log "AVISO: 'writeFiles' não aparece na lista. Se o upload abaixo funcionar," ;
+         log "       a lista é que está sendo lida errado; se falhar, a chave é a errada." ;;
+    esac
+    case ",${B2_CAPACIDADES}," in
+      *,deleteFiles,*)
+        log "AVISO: esta chave tem 'deleteFiles'. O desenho da #4 supõe Write Only —" ;
+        log "       com deleteFiles, quem invadir a VPS apaga o histórico de backups." ;;
+    esac
+  else
+    log "Autorização OK. Não consegui ler a lista de capacidades (formato da API mudou)."
+    log "Isso não impede nada: quem prova a permissão de escrita é o upload abaixo."
+  fi
 
   echo "teste de upload do micasa" > "${TMP}/teste.txt"
   b2_enviar "${TMP}/teste.txt" "testes/upload-$(date -u +%Y%m%dT%H%M%SZ).txt"
