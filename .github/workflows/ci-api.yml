@@ -1,18 +1,25 @@
 name: CI API
 
+# SEM filtro de `paths:`, de propósito — ver issue #47.
+#
+# O filtro (`api/**`) parecia economia óbvia, mas uma PR que só toque `docs/`,
+# `infra/` ou `.github/` não disparava workflow NENHUM. Isso torna impossível
+# exigir status check na `main`: o check obrigatório nunca chegaria e a PR ficaria
+# travada para sempre esperando algo que não vai rodar. A PR #46 provou o caso —
+# só mexia em `infra/` e reportou "no checks".
+#
+# O que a economia valia, medido: este workflow leva 29–39 s. Meio minuto por PR,
+# em runner de repositório público, que não consome cota. Não paga o pé-de-cabra.
 on:
   push:
     branches: [main]
-    paths:
-      - "api/**"
-      - ".github/workflows/ci-api.yml"
   pull_request:
-    paths:
-      - "api/**"
-      - ".github/workflows/ci-api.yml"
 
 jobs:
-  quality:
+  # O nome do job vira o nome do check. Os dois workflows chamavam o seu de
+  # `quality`, o que produzia dois checks homônimos e tornava ambígua qualquer
+  # regra que exigisse "o check quality".
+  api:
     runs-on: ubuntu-latest
     defaults:
       run:
