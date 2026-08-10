@@ -10,9 +10,9 @@
 # Uso (de dentro do repositório já clonado — ver infra/README.md):
 #   sudo DOMINIO=micasa-bionde.duckdns.org EMAIL_TLS=voce@exemplo.com ./infra/provision.sh
 #
-# PULAR_AJUSTES_DE_HOST=1 desliga as quatro seções que só fazem sentido numa VM
-# de verdade (fuso, swap, iptables e certbot). Existe para ensaiar o script no
-# WSL antes de rodá-lo na VPS — ver infra/README.md, "Ensaio fora da VPS".
+# PULAR_AJUSTES_DE_HOST=1 desliga as cinco seções que só fazem sentido numa VM
+# de verdade (fuso, swap, iptables, fail2ban e certbot). Existe para ensaiar o
+# script no WSL antes de rodá-lo na VPS — ver infra/README.md, "Ensaio fora da VPS".
 # É dívida assumida: código de produção com uma opção que só serve para teste.
 #
 set -Eeuo pipefail
@@ -36,7 +36,7 @@ banner_modo_teste() {
     '===============================================================' \
     ' ATENÇÃO: PULAR_AJUSTES_DE_HOST=1 — MODO DE ENSAIO' \
     '' \
-    ' Fuso horário, swap, iptables e certbot NÃO são aplicados.' \
+    ' Fuso horário, swap, iptables, fail2ban e certbot NÃO são aplicados.' \
     ' O que sai daqui NÃO é um servidor de produção válido.' \
     ' Nunca use esta variável na VPS.' \
     '==============================================================='
@@ -120,7 +120,25 @@ else
       iptables -I INPUT 1 -p tcp --dport "$porta" -m conntrack --ctstate NEW -j ACCEPT
     fi
   done
+
+  # O fail2ban cria chains próprias (f2b-*) em tempo de execução, com um IP
+  # banido por vez. Se elas estiverem ativas quando o netfilter-persistent
+  # salvar, um banimento de 1 hora vira regra permanente no disco: o boot a
+  # restaura e não há mais ninguém para expirá-la — o IP fica preso para sempre.
+  # Numa segunda execução deste script, o fail2ban da seção 5 já está no ar.
+  F2B_ESTAVA_ATIVO=0
+  if systemctl is-active --quiet fail2ban 2>/dev/null; then
+    F2B_ESTAVA_ATIVO=1
+    systemctl stop fail2ban
+  fi
+
   netfilter-persistent save >/dev/null
+
+  # `if` em vez de `[[ ... ]] && systemctl start`: com set -e, a forma curta
+  # mataria o script quando a condição fosse falsa, que é o caso comum.
+  if [[ "${F2B_ESTAVA_ATIVO}" -eq 1 ]]; then
+    systemctl start fail2ban
+  fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -160,7 +178,51 @@ if ! command -v composer >/dev/null; then
 fi
 
 # ---------------------------------------------------------------------------
-# 5. PHP-FPM dimensionado para 1 GB
+# 5. fail2ban (SSH)
+# ---------------------------------------------------------------------------
+# Medido em 2026-08-10 nesta VPS: 931 tentativas de autenticação SSH falhas em
+# 24 h, vindas de 26 IPs. Nenhuma tinha chance — `sshd -T` confirma
+# `passwordauthentication no`, só entra chave. Portanto isto NÃO tapa buraco
+# explorável: o ganho é ruído de log, CPU e banda em 1/8 de OCPU, mais rede de
+# proteção caso a autenticação por senha volte a ser ligada um dia. Ver #45.
+#
+# ignoreip fica sem o IP do dev DE PROPÓSITO: este repositório é público, e IP
+# residencial publicado é exposição sem ganho — além de ser dinâmico e envelhecer.
+if pular_host; then
+  # A jail age sobre o iptables real; fora da imagem da Oracle não há regra a
+  # inserir, e o serviço subiria falhando. Mesmo tratamento da seção 3.
+  warn "fail2ban: pulado (PULAR_AJUSTES_DE_HOST=1)."
+else
+  log "Instalando e configurando fail2ban"
+  DEBIAN_FRONTEND=noninteractive apt-get install -y fail2ban >/dev/null
+
+  # jail.d/*.local é lido DEPOIS de jail.conf e de jail.d/*.conf, então este
+  # arquivo vence o defaults-debian.conf que vem no pacote — sem precisar editar
+  # arquivo de terceiro, que o próximo apt-get upgrade sobrescreveria.
+  #
+  # backend=systemd em vez do /var/log/auth.log: o journal existe sempre, e o
+  # auth.log só existe enquanto o rsyslog continuar instalado.
+  #
+  # bantime finito de propósito. Banimento permanente transforma um engano do
+  # próprio dev em visita ao console da Oracle para recuperar o acesso.
+  cat > /etc/fail2ban/jail.d/micasa.local <<'EOF'
+[DEFAULT]
+backend  = systemd
+bantime  = 1h
+findtime = 10m
+maxretry = 5
+ignoreip = 127.0.0.1/8 ::1
+
+[sshd]
+enabled = true
+EOF
+
+  systemctl enable fail2ban >/dev/null
+  systemctl restart fail2ban
+fi
+
+# ---------------------------------------------------------------------------
+# 6. PHP-FPM dimensionado para 1 GB
 # ---------------------------------------------------------------------------
 # O pool padrão (www) usa pm=dynamic e mantém filhos vivos à toa. Numa casa de
 # 4 pessoas o tráfego é rajada curta com longos silêncios: ondemand mantém zero
@@ -211,7 +273,7 @@ EOF
 systemctl restart "php${PHP_VERSION}-fpm"
 
 # ---------------------------------------------------------------------------
-# 6. Permissões
+# 7. Permissões
 # ---------------------------------------------------------------------------
 # Dono é o usuário de deploy (escreve sem sudo), grupo www-data (o PHP-FPM lê).
 # setgid nos diretórios de escrita para que arquivo novo nasça no grupo certo.
@@ -238,7 +300,7 @@ if ! id -nG "${DEPLOY_USER}" | grep -qw www-data; then
 fi
 
 # ---------------------------------------------------------------------------
-# 7. nginx — origem única (ADR-020)
+# 8. nginx — origem única (ADR-020)
 # ---------------------------------------------------------------------------
 log "Configurando nginx para ${DOMINIO}"
 mkdir -p "${APP_DIR}/web/dist"
@@ -260,7 +322,7 @@ nginx -t
 systemctl reload nginx
 
 # ---------------------------------------------------------------------------
-# 8. Fila e scheduler
+# 9. Fila e scheduler
 # ---------------------------------------------------------------------------
 log "Instalando serviço da fila e cron do scheduler"
 sed -e "s|__APP_DIR__|${APP_DIR}|g" \
@@ -275,7 +337,7 @@ systemctl enable micasa-queue.service >/dev/null
 # Não iniciamos agora: sem vendor/ nem .env, o worker entraria em loop de falha.
 
 # ---------------------------------------------------------------------------
-# 9. Certificado TLS
+# 10. Certificado TLS
 # ---------------------------------------------------------------------------
 # Depende de o DNS já apontar para esta máquina: o desafio HTTP-01 do
 # Let's Encrypt bate na porta 80 deste servidor, pelo nome do domínio.
