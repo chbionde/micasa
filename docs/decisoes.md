@@ -120,6 +120,28 @@
 **Decisão:** cron noturno: cópia íntegra do SQLite → cifra com **age** → sobe para B2 → retém 30 dias. Chave de decifragem em dois lugares: na VPS (para cifrar) e no gerenciador de senhas pessoal do dev (para restaurar — cópia inegociável). **Teste de restauração a cada 3 meses**; a primeira restauração faz parte do DoD da Fatia 0.
 **Gatilho de revisão:** entrada das despesas (Fatia 5) → reavaliar Litestream para reduzir a janela de perda.
 
+### Emenda (2026-08-10) — `age` assimétrico, retenção por Lifecycle Rule e vigia externo
+
+**Contexto:** ao implementar a issue #4 ficou claro que a decisão original tinha três pontos vagos ou errados. Aprovados pelo dev em 07/08 (chave assimétrica) e 10/08 (vigia externo).
+
+**1. A chave deixa de ser simétrica.** O texto acima diz *"Chave de decifragem em dois lugares: na VPS (para cifrar) e no gerenciador de senhas pessoal do dev"*. Isso pressupõe chave simétrica e **coloca material de decifragem dentro do servidor** — de modo que quem dominasse a VPS decifraria todos os backups, inclusive os antigos.
+
+Passa a valer `age` em **modo assimétrico (X25519)**: a VPS guarda **apenas a chave pública**, que não é segredo e está versionada em `infra/env.production.example`. A privada **nunca passa pela VPS** e é gerada fora dela — gerar lá e apagar depois não é equivalente, porque deixa rastro em histórico de shell, journal e blocos livres do disco. O `infra/backup.sh` se recusa a rodar se encontrar `AGE-SECRET-KEY` no `.env`.
+
+A cópia externa da privada continua **inegociável**, mas muda de natureza: deixa de ser "cópia de algo que está no servidor" e passa a ser **o único lugar onde o segredo existe**.
+
+**2. A retenção de 30 dias é Lifecycle Rule do bucket, não do script.** A chave da VPS é Write Only (só `writeFiles`), então o script **não tem permissão para apagar**. Deixou de ser opção — e é o desenho mais seguro de qualquer forma: nem um invasor com a credencial da máquina apaga histórico. O ADR fixava "30 dias" sem dizer *como*, então isto é compatível sem contradizê-lo.
+
+**3. Alerta de falha vira interruptor de homem morto.** O ADR não previa alerta; a #4 acrescentou "o script precisa gritar quando falha". Isso é insuficiente, e a razão é estrutural: **um alerta enviado pelo script não detecta o script que não rodou.** Cron desabilitado, disco cheio, VPS recuperada por ociosidade — em todos, o script não roda, logo não falha, logo não avisa. E são justamente os cenários em que o backup importa.
+
+Inverte-se o sentido: o script avisa quando termina **bem** (`BACKUP_PING_URL`), e um observador **fora da VPS** alarma quando o aviso não chega. Cobre falha do script, cron parado e máquina morta com um mecanismo só. O critério é "o observador precisa estar fora da máquina observada"; a escolha do serviço é operacional, não arquitetural, e o script só conhece uma URL.
+
+**Consequências:**
+- Restauração passa a exigir a chave privada **e** uma máquina que não seja a VPS. O `infra/restaurar.sh` recusa a chave pública e documenta isso.
+- Verificar backup pelo B2 exige a segunda chave, **Read Only**, usada à mão pelo dev.
+- **Object Lock continua adiado** (ver decisões adiadas): o B2 só oferece modo Compliance, irreversível, que nem o suporte da Backblaze destrava. Se for ativado, a retenção do lock precisa ser **menor ou igual** à da Lifecycle Rule — lock mais longo impede o apagamento e o espaço cresce sem como limpar.
+- **O que não muda:** cadência diária, retenção de 30 dias, teste de restauração a cada 3 meses, e a primeira restauração como parte do DoD da Fatia 0.
+
 ## ADR-010 — Listas de compras: texto livre + autocomplete, sem catálogo, sem tempo real
 
 **Contexto:** preenchimento não pode ser massante. Catálogo formal de produtos gera fricção ("produto novo ou existente?") e manutenção de duplicatas. A máquina de recorrência só nasce na Fatia 5 — a Fatia 2 não pode depender dela.

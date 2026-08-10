@@ -132,22 +132,32 @@ else
     systemctl stop fail2ban
   fi
 
-  netfilter-persistent save >/dev/null
+  # O código de saída é capturado em vez de deixar o set -e agir na hora: com o
+  # fail2ban parado, morrer aqui deixaria o SSH sem jail nenhuma e sem ninguém
+  # avisando — degradação silenciosa, que é pior que a falha barulhenta. Religa
+  # primeiro, reclama depois.
+  CODIGO_SAVE=0
+  netfilter-persistent save >/dev/null || CODIGO_SAVE=$?
 
   # `if` em vez de `[[ ... ]] && systemctl start`: com set -e, a forma curta
   # mataria o script quando a condição fosse falsa, que é o caso comum.
   if [[ "${F2B_ESTAVA_ATIVO}" -eq 1 ]]; then
     systemctl start fail2ban
   fi
+
+  [[ "${CODIGO_SAVE}" -eq 0 ]] \
+    || erro "netfilter-persistent save falhou (código ${CODIGO_SAVE}). O fail2ban foi religado."
 fi
 
 # ---------------------------------------------------------------------------
 # 4. Pacotes
 # ---------------------------------------------------------------------------
+# `age` alimenta o infra/backup.sh (ADR-009 e sua emenda de 2026-08-10). Vem do
+# repositório do Ubuntu 24.04 — não precisa de binário baixado à mão.
 log "Atualizando índices e instalando pacotes base"
 apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
-  software-properties-common curl git unzip sqlite3 nginx >/dev/null
+  software-properties-common curl git unzip sqlite3 nginx age >/dev/null
 
 # O Ubuntu 24.04 só traz PHP 8.3; o CI roda 8.4. Produção divergindo do CI é
 # bug esperando acontecer, então usamos o PPA do ondrej.
@@ -194,7 +204,14 @@ if pular_host; then
   warn "fail2ban: pulado (PULAR_AJUSTES_DE_HOST=1)."
 else
   log "Instalando e configurando fail2ban"
-  DEBIAN_FRONTEND=noninteractive apt-get install -y fail2ban >/dev/null
+
+  # A configuração é escrita ANTES do apt-get, de propósito. O pacote sobe o
+  # serviço já na instalação: sem este arquivo no lugar, o fail2ban nasce com o
+  # bantime padrão de 600 s e o primeiro IP banido de uma VPS nova fica 10 min em
+  # vez de 60. O `systemctl restart` seguinte NÃO corrige — o bantime é gravado
+  # por banimento no banco do próprio fail2ban, e a restauração preserva o valor
+  # antigo. Observado na VPS em 2026-08-10, ver #45.
+  mkdir -p /etc/fail2ban/jail.d
 
   # jail.d/*.local é lido DEPOIS de jail.conf e de jail.d/*.conf, então este
   # arquivo vence o defaults-debian.conf que vem no pacote — sem precisar editar
@@ -217,6 +234,7 @@ ignoreip = 127.0.0.1/8 ::1
 enabled = true
 EOF
 
+  DEBIAN_FRONTEND=noninteractive apt-get install -y fail2ban >/dev/null
   systemctl enable fail2ban >/dev/null
   systemctl restart fail2ban
 fi
@@ -331,6 +349,10 @@ sed -e "s|__APP_DIR__|${APP_DIR}|g" \
 sed -e "s|__APP_DIR__|${APP_DIR}|g" \
     "${APP_DIR}/infra/cron/micasa-scheduler" > /etc/cron.d/micasa-scheduler
 chmod 644 /etc/cron.d/micasa-scheduler
+
+sed -e "s|__APP_DIR__|${APP_DIR}|g" \
+    "${APP_DIR}/infra/cron/micasa-backup" > /etc/cron.d/micasa-backup
+chmod 644 /etc/cron.d/micasa-backup
 
 systemctl daemon-reload
 systemctl enable micasa-queue.service >/dev/null
