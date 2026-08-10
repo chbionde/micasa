@@ -8,6 +8,8 @@ Runbook da VPS do MiCasa. Decisões que embasam este diretório: **ADR-003** (Or
 |---|---|
 | `provision.sh` | Roda **uma vez** numa VPS nova. Deixa a máquina pronta, sem a aplicação. |
 | `deploy.sh` | Roda **a cada** publicação. Atualiza código, dependências, banco e caches. |
+| `backup.sh` | Roda **por cron, diariamente**. Cópia consistente do SQLite → gzip → `age` → Backblaze B2. |
+| `restaurar.sh` | Roda **à mão, fora da VPS**. Decifra um backup e prova que o banco abre. |
 | `nginx/micasa.conf.template` | Site do nginx. O `provision.sh` substitui os `__PLACEHOLDER__`. |
 | `systemd/micasa-queue.service` | Worker da fila. |
 | `cron/micasa-scheduler` | Entrada única de cron do scheduler do Laravel. |
@@ -114,6 +116,31 @@ rm -f /tmp/micasa-deploy*
 
 **O que essa chave pode fazer:** ela entra como o usuário `ubuntu`, que tem `sudo`. Quem obtiver o conteúdo do secret tem controle da VPS. Reduzir isso para um usuário dedicado com `sudo` restrito aos três comandos do deploy está registrado na issue de segurança.
 
+## Backup
+
+Diário às **06:00 UTC** (03:00 em São Paulo), por `/etc/cron.d/micasa-backup`. Implementa o ADR-009 e sua emenda de 2026-08-10.
+
+```bash
+./infra/backup.sh --testar            # valida credenciais e upload, sem tocar no banco
+./infra/backup.sh                     # o que o cron roda
+./infra/backup.sh --local /tmp        # grava cifrado no disco, sem subir nada
+journalctl -t micasa-backup --since today
+```
+
+**A chave privada do `age` não existe nesta máquina, e isso é o desenho, não um esquecimento.** A VPS só tem a pública, que cifra e não decifra. Quem invadir o servidor não abre backup nenhum — nem os antigos. O `backup.sh` aborta se achar `AGE-SECRET-KEY` no `.env`.
+
+Consequência prática: **restaurar não se faz aqui.** Baixe o arquivo (console da Backblaze, ou a chave Read Only) e rode na sua máquina:
+
+```bash
+./infra/restaurar.sh micasa-AAAAMMDDTHHMMSSZ.sqlite.gz.age ~/sua-chave-privada.key
+```
+
+Ele decifra, confere `integrity_check`, conta as linhas de cada tabela e mostra **a data do registro mais recente**. Essa data é o que importa: um backup íntegro de três meses atrás passa em todas as outras verificações e ainda assim significa que o cron parou em silêncio há três meses.
+
+**A retenção de 30 dias é Lifecycle Rule do bucket, não do script.** A chave é Write Only e não tem permissão para apagar — de propósito: nem um invasor com a credencial da máquina apaga o histórico.
+
+**O vigia é quem avisa, não o log.** `BACKUP_PING_URL` é chamada quando o backup termina bem; um observador externo alarma quando a chamada não chega. Se estiver vazia, uma falha passa em silêncio — inclusive a falha de o cron nunca ter rodado, que nenhum log dentro da VPS registraria.
+
 ## Verificando
 
 ```bash
@@ -145,3 +172,7 @@ sudo fail2ban-client status sshd                   # IPs banidos no SSH
 | Rota nova do servidor devolve HTML da SPA | Ela não está na lista de caminhos do nginx. Ver ADR-020. |
 | Seu IP levou ban no SSH | `sudo fail2ban-client set sshd unbanip SEU_IP`. O ban expira sozinho em 1 h. Se persistir depois disso, um `netfilter-persistent save` gravou a regra em disco com o fail2ban no ar — a seção 3 do `provision.sh` existe para impedir isso. |
 | `fail2ban-client status sshd` diz `Currently banned: 0` | A jail não está lendo o journal. Confira `sudo fail2ban-client get sshd bantime` (tem de ser `3600`) e `journalctl -u fail2ban -n 30`. Numa máquina exposta, zero banimento é defeito, não sorte. |
+| Procurando chain `f2b-sshd` no `iptables` e não achando | Esse é o nome da ação `iptables-multiport`; o Ubuntu 24.04 usa `banaction = nftables`. Olhe com `sudo nft list table inet f2b-table`. O `iptables` aqui é `iptables-nft` e **não mostra** tabelas fora das que ele mapeia. |
+| Backup "não roda" e não há erro | O cron manda tudo para o journal: `journalctl -t micasa-backup --since today`. Se não houver linha nenhuma, o cron não disparou — confira `/etc/cron.d/micasa-backup` e `systemctl status cron`. |
+| `b2_authorize_account falhou` | Credencial errada, revogada ou expirada. Rode `./infra/backup.sh --testar`: ele imprime as capacidades reais da chave. Sem `writeFiles`, ela não sobe nada. |
+| `age` recusa decifrar na restauração | Chave privada errada. A pública (`age1...`) **não** decifra — é matemática, não permissão. Confira que o arquivo tem `AGE-SECRET-KEY`. |

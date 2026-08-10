@@ -1,0 +1,24 @@
+# MiCasa - backup diario cifrado para o Backblaze B2 (ADR-009, issue #4).
+#
+# 06:00 UTC = 03:00 em America/Sao_Paulo. O servidor roda em UTC (ADR-008), entao
+# o horario aqui e UTC e nao acompanha o horario de verao brasileiro - o que e
+# desejavel: a janela de menor uso nao se move porque o relogio civil mudou.
+#
+# Roda como o usuario de deploy, e nao como www-data: o backup le o api/.env, que
+# pertence a ele. O `ubuntu` esta no grupo www-data (ver secao 7 do provision.sh),
+# entao enxerga o database.sqlite-wal criado pelo PHP-FPM.
+#
+# A saida vai para o journal em vez de /dev/null: se o script morrer ANTES do
+# proprio logger dele funcionar - erro de sintaxe, interpretador faltando - com
+# /dev/null nao sobraria registro em lugar nenhum. Ler com:
+#   journalctl -t micasa-backup --since today
+#
+# Isto NAO substitui o vigia externo (BACKUP_PING_URL). Log so ajuda quem ja
+# desconfia que algo esta errado; o vigia e quem avisa.
+#
+# Instalado por infra/provision.sh em /etc/cron.d/micasa-backup.
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+0 6 * * * ubuntu __APP_DIR__/infra/backup.sh 2>&1 | logger -t micasa-backup
