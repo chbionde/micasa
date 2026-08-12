@@ -328,56 +328,10 @@ fi
 # ---------------------------------------------------------------------------
 # 7b. Conta de deploy com poder mínimo (#55)
 # ---------------------------------------------------------------------------
-# A chave da Action entra por aqui, e não pela conta de administração. O ganho
-# é limitado e vale dizer qual é: isto reduz o pior caso de "root na máquina"
-# para "controle da aplicação". Não elimina o segundo — a chave abre um shell e
-# o deploy.sh faz `git pull`. Consertar isso seria outra arquitetura de deploy
-# (artefato assinado, servidor puxando em vez de recebendo), e não se justifica
-# neste projeto hoje.
-if ! id -u "${USUARIO_DEPLOY}" >/dev/null 2>&1; then
-  log "Criando o usuário de deploy ${USUARIO_DEPLOY}"
-  # --disabled-password: entra só por chave. Shell de verdade porque a Action
-  # roda `ssh ... './infra/deploy.sh'`.
-  adduser --system --group --shell /bin/bash --disabled-password \
-    --home "/home/${USUARIO_DEPLOY}" "${USUARIO_DEPLOY}" >/dev/null
-fi
-usermod -aG www-data "${USUARIO_DEPLOY}"
-install -d -m 700 -o "${USUARIO_DEPLOY}" -g "${USUARIO_DEPLOY}" "/home/${USUARIO_DEPLOY}/.ssh"
-
-log "Instalando ${POS_DEPLOY}"
-# root:root 0755 — o usuário de deploy executa e NÃO escreve. Se escrevesse,
-# reescreveria o script e teria root de volta pela porta dos fundos.
-sed -e "s|__APP_DIR__|${APP_DIR}|g" \
-    -e "s|__PHP_VERSION__|${PHP_VERSION}|g" \
-    "${APP_DIR}/infra/micasa-pos-deploy.template" > "${POS_DEPLOY}"
-chown root:root "${POS_DEPLOY}"
-chmod 0755 "${POS_DEPLOY}"
-
-log "Escrevendo a regra de sudo do deploy"
-# Sem argumento na regra: o script não aceita nenhum, então não há linha de
-# comando para alguém moldar. Ver o cabeçalho do template para a armadilha que
-# isto evita.
-#
-# VALIDADA ANTES DE INSTALAR, e a ordem é o ponto: um arquivo inválido em
-# /etc/sudoers.d tira o sudo de TODO mundo na máquina, inclusive o seu. Validar
-# depois de instalar significa existir uma janela — curta, mas real — em que
-# ninguém consegue virar root para consertar. Escrever num arquivo temporário,
-# conferir, e só então mover não tem janela nenhuma.
-SUDOERS_TMP="$(mktemp)"
-cat > "${SUDOERS_TMP}" <<SUDOERS
-# Gerado por infra/provision.sh — não edite à mão (ver issue #55).
-${USUARIO_DEPLOY} ALL=(root) NOPASSWD: ${POS_DEPLOY}
-SUDOERS
-
-if ! visudo -c -q -f "${SUDOERS_TMP}"; then
-  rm -f "${SUDOERS_TMP}"
-  erro "A regra de sudo saiu inválida. NADA foi instalado — seu sudo continua intacto."
-fi
-
-# 0440 é o modo que o sudo exige; com qualquer outro ele ignora o arquivo em
-# silêncio, e a regra simplesmente não valeria.
-install -m 0440 -o root -g root "${SUDOERS_TMP}" /etc/sudoers.d/micasa-deploy
-rm -f "${SUDOERS_TMP}"
+# Delegado para haver UM caminho: máquina nova e máquina já existente passam
+# pelo mesmo código. Numa VPS que já roda, o dev chama o script direto, sem
+# precisar rodar o provisionamento inteiro para criar um usuário.
+"${APP_DIR}/infra/criar-conta-deploy.sh"
 
 # ---------------------------------------------------------------------------
 # 8. nginx — origem única (ADR-020)

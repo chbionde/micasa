@@ -14,6 +14,7 @@ Runbook da VPS do MiCasa. Decisões que embasam este diretório: **ADR-003** (Or
 | `aplicar-nginx.sh` | Roda **à mão, quando `infra/nginx/` mudar**. O deploy automático não toca no nginx. |
 | `nginx/cabecalhos-seguranca.conf` | Cabeçalhos de segurança, num lugar só. Incluído pelas locations do site. |
 | `micasa-pos-deploy.template` | Os três passos do deploy que exigem root. Instalado em `/usr/local/sbin/`. |
+| `criar-conta-deploy.sh` | Roda **uma vez por VPS**. Cria a conta de deploy sem poder de root (#55). |
 | `nginx/micasa.conf.template` | Site do nginx. O `provision.sh` substitui os `__PLACEHOLDER__`. |
 | `systemd/micasa-queue.service` | Worker da fila. |
 | `cron/micasa-scheduler` | Entrada única de cron do scheduler do Laravel. |
@@ -144,65 +145,176 @@ Por isso a autorização é para o script, **sem argumento nenhum**. Os caminhos
 
 ### Migrando uma VPS que já existe (#55)
 
-A ordem importa: **não remova o acesso antigo antes de o novo funcionar.** Um passo por vez, conferindo a saída de cada um.
+**Antes de começar, entenda o desenho.** Hoje a Action entra na VPS como `ubuntu`, que tem sudo
+irrestrito. Vamos criar uma conta separada — `micasa-deploy` — que só consegue rodar um único
+comando como root. Sua conta `ubuntu` **não muda**: ela continua sendo como você administra a
+máquina, e é o caminho de volta se algo der errado.
 
-**1. Atualizar o código e provisionar** (na VPS, com o seu usuário):
+A ordem importa. **Nada do acesso antigo é removido antes de o novo funcionar.** São 7 passos;
+faça um por vez e confira a saída de cada um antes de seguir.
+
+---
+
+#### Passo 1 — Atualizar o código na VPS
+
+**O que faz:** traz os arquivos novos (o script da conta de deploy e o que roda como root).
+**Onde:** na VPS, pelo SSH, com o seu usuário `ubuntu`.
 
 ```bash
-cd /var/www/micasa && git pull --ff-only && sudo ./infra/provision.sh
+cd /var/www/micasa && git status --porcelain && git pull --ff-only
 ```
 
-Espere ver `Criando o usuário de deploy micasa-deploy` e `Escrevendo a regra de sudo do deploy`.
+**Saída esperada:** o `git status --porcelain` **não imprime nada**, e depois vem
+`Updating ...` ou `Already up to date.`
 
-**2. Conferir que o sudo da conta nova é mesmo restrito:**
+**Se divergir:** se o `git status` listar arquivos (você abriu o `provision.sh` no `nano` numa
+tentativa anterior — pode ter salvado sem querer), desfaça antes de continuar:
 
 ```bash
-sudo -u micasa-deploy sudo -l
+git checkout -- infra/provision.sh && git status --porcelain
 ```
 
-Tem de listar `/usr/local/sbin/micasa-pos-deploy` e **nada mais**. Se listar `(ALL) ALL`, pare — a regra não pegou.
+---
 
-**3. Dar a chave de deploy à conta nova.** Gere um par novo (aproveite para rotacionar) e autorize só a conta de deploy:
+#### Passo 2 — Criar a conta de deploy
+
+**O que faz:** cria o usuário `micasa-deploy`, instala `/usr/local/sbin/micasa-pos-deploy`
+(os três comandos do deploy que exigem root) e escreve a regra de sudo que autoriza **só** esse
+script.
+**Onde:** na VPS.
+
+> Este passo **não** é o `provision.sh`. Aquele monta a máquina inteira — pacotes, PHP-FPM,
+> swap, iptables, fail2ban, certbot — e seria desproporcional para criar um usuário. O
+> `provision.sh` chama este mesmo script, então máquina nova e máquina antiga passam pelo mesmo
+> código.
 
 ```bash
-# na sua máquina
+sudo ./infra/criar-conta-deploy.sh
+```
+
+**Saída esperada:** termina com
+
+```
+  ✓ autorizada em /usr/local/sbin/micasa-pos-deploy
+  ✓ sem sudo irrestrito
+==> Pronto.
+```
+
+**Se divergir:** se aparecer `A regra saiu inválida. NADA foi instalado`, seu sudo continua
+intacto — o script valida antes de instalar, justamente para não te trancar fora. Me mande a
+saída.
+
+---
+
+#### Passo 3 — Gerar uma chave nova para o deploy
+
+**O que faz:** cria um par de chaves só para a Action. Aproveitamos para rotacionar: a chave
+antiga deixa de valer no fim da migração.
+**Onde:** na **sua máquina** (WSL), não na VPS.
+
+```bash
 ssh-keygen -t ed25519 -N "" -C "micasa-deploy (github actions)" -f /tmp/micasa-deploy
 cat /tmp/micasa-deploy.pub
 ```
 
-Na VPS, com a pública que apareceu acima:
+**Saída esperada:** uma linha começando com `ssh-ed25519 AAAA...` e terminando em
+`micasa-deploy (github actions)`. **Copie essa linha inteira** — ela é a chave *pública*.
+
+⚠️ O arquivo `/tmp/micasa-deploy` (sem `.pub`) é a chave **privada**. Não cole o conteúdo dele
+em lugar nenhum — nem aqui na conversa. Ele vai direto para o secret do GitHub no passo 5.
+
+---
+
+#### Passo 4 — Autorizar essa chave na conta nova
+
+**O que faz:** permite que quem tiver a chave privada entre como `micasa-deploy`.
+**Onde:** na VPS.
+
+Cole o comando abaixo trocando `CONTEUDO-DA-PUBLICA` pela linha que você copiou no passo 3
+(ela começa com `ssh-ed25519`):
 
 ```bash
-sudo tee -a /home/micasa-deploy/.ssh/authorized_keys <<< 'COLE-A-PUBLICA-AQUI'
+echo 'CONTEUDO-DA-PUBLICA' | sudo tee -a /home/micasa-deploy/.ssh/authorized_keys
 sudo chown micasa-deploy:micasa-deploy /home/micasa-deploy/.ssh/authorized_keys
 sudo chmod 600 /home/micasa-deploy/.ssh/authorized_keys
 ```
 
-**4. Passar o dono do diretório da aplicação para a conta nova:**
+**Saída esperada:** o `tee` repete a linha na tela; os outros dois não imprimem nada.
+
+**Confira antes de seguir:**
+
+```bash
+sudo ls -l /home/micasa-deploy/.ssh/authorized_keys
+```
+
+Tem de mostrar `-rw------- 1 micasa-deploy micasa-deploy`.
+
+---
+
+#### Passo 5 — Dar o diretório da aplicação à conta nova
+
+**O que faz:** a conta de deploy precisa escrever no repositório (`git pull`, `composer
+install`, caches). Hoje o dono é `ubuntu`.
+**Onde:** na VPS.
 
 ```bash
 sudo chown -R micasa-deploy:www-data /var/www/micasa
 ```
 
-**5. Atualizar os secrets do GitHub:**
+**Saída esperada:** nada. **Confira:**
 
 ```bash
-# na sua máquina
-gh secret set SSH_PRIVATE_KEY < /tmp/micasa-deploy
-gh secret set SSH_USER --body micasa-deploy
-rm -f /tmp/micasa-deploy*
+ls -ld /var/www/micasa
 ```
 
-**6. Testar o deploy** pelo botão *Run workflow* na aba Actions. Ele tem de terminar verde, **sem** a linha `A conta de deploy ainda usa sudo irrestrito`.
+Tem de mostrar `micasa-deploy www-data`.
 
-**7. Só depois de o passo 6 passar**, remova a chave de deploy antiga do seu usuário:
+> Sua conta `ubuntu` continua no grupo `www-data`, então você continua conseguindo ler e editar
+> ali. Para comandos que escrevem, use `sudo -u micasa-deploy`.
+
+---
+
+#### Passo 6 — Apontar o GitHub para a conta nova
+
+**O que faz:** troca a chave e o usuário que a Action usa.
+**Onde:** na **sua máquina** (WSL), no diretório do repositório.
 
 ```bash
-# na VPS: apague de ~/.ssh/authorized_keys a linha com o comentário "micasa-deploy"
+gh secret set SSH_PRIVATE_KEY < /tmp/micasa-deploy
+gh secret set SSH_USER --body micasa-deploy
+rm -f /tmp/micasa-deploy /tmp/micasa-deploy.pub
+```
+
+**Saída esperada:** `✓ Set Actions secret SSH_PRIVATE_KEY` e o mesmo para `SSH_USER`.
+
+---
+
+#### Passo 7 — Testar o deploy, e só então fechar a porta antiga
+
+**O que faz:** confirma que a conta nova publica de verdade, antes de você perder a antiga.
+**Onde:** no GitHub, aba **Actions** → workflow **Deploy** → botão **Run workflow**.
+
+**Saída esperada:** todos os passos verdes, e no log do passo *Publicar o back* **não** aparece
+a linha:
+
+```
+[aviso] A conta de deploy ainda usa sudo irrestrito (#55 em aberto).
+```
+
+Se esse aviso aparecer, o passo 2 não foi aplicado — pare e volte nele.
+
+**Só depois do deploy verde**, remova a chave de deploy antiga da sua conta, na VPS:
+
+```bash
 nano ~/.ssh/authorized_keys
 ```
 
-⚠️ Sua chave **pessoal** fica. É ela que te dá acesso administrativo — e é a única forma de voltar se algo der errado.
+Apague **apenas** a linha que termina com o comentário `micasa-deploy` antigo. ⚠️ **Não apague a
+linha da sua chave pessoal** — é ela que te dá acesso à máquina.
+
+**Confira que você ainda entra**, abrindo uma segunda sessão SSH **sem fechar a atual**. Se a
+nova sessão funcionar, está feito. Se não funcionar, você ainda tem a sessão aberta para
+desfazer.
 
 ## Backup
 
