@@ -80,14 +80,14 @@ php artisan route:cache
 php artisan view:cache
 php artisan event:cache
 
-# O WAL do SQLite cria database.sqlite-wal e -shm ao lado do banco, então o
-# grupo precisa de escrita no diretório, não só no arquivo.
-log "Ajustando permissões"
 # ---------------------------------------------------------------------------
 # 5 e 6. Permissões e reinício dos processos — a parte que exige root
 # ---------------------------------------------------------------------------
 # Os três comandos com root vivem num script root:root instalado pelo
-# provision.sh, e a regra de sudo autoriza ESSE script, sem argumento (#55).
+# criar-conta-deploy.sh, e a regra de sudo autoriza ESSE script, sem argumento
+# nenhum (#55). O porquê de cada um deles está no próprio script — inclusive o
+# do WAL do SQLite, que é o motivo de a escrita precisar valer no diretório e
+# não só no arquivo.
 #
 # O motivo de não ser uma regra de sudoers listando os três comandos direto:
 # o sudoers casa a linha de comando literalmente, e `chmod -R g+w storage ...`
@@ -106,7 +106,8 @@ else
   # com sudo irrestrito, que é o buraco da #55.
   warn_transicao="A conta de deploy ainda usa sudo irrestrito (#55 em aberto)."
   printf '\033[1;33m[aviso] %s\033[0m\n' "${warn_transicao}"
-  printf '\033[1;33m[aviso] %s\033[0m\n' "Rode o infra/provision.sh na VPS para instalar ${POS_DEPLOY}."
+  printf '\033[1;33m[aviso] %s\033[0m\n' "Para fechar: rode  sudo ./infra/criar-conta-deploy.sh  na VPS."
+  printf '\033[1;33m[aviso] %s\033[0m\n' "Passo a passo completo em infra/README.md."
   sudo chmod -R g+w storage bootstrap/cache database
   sudo systemctl reload "php${PHP_VERSION}-fpm"
   sudo systemctl restart micasa-queue
