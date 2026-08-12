@@ -391,8 +391,7 @@ Regras importantes:
 
 | Issue | O que é |
 |---|---|
-| **#62** | Migração controlada do Claude Code para o Codex — issue ativa até o PR ser mergeado |
-| **#53** | CSP — no ar em modo relato; falta o dev conferir o console numa janela anônima |
+| **#53** | CSP — validação em modo relato concluída; promoção da política estrita em andamento |
 | **#54** | HSTS — não começada; fecha em `max-age=2592000` |
 | **#55** | Chave de deploy — passos 1–6 feitos; falta o passo 7 do `infra/README.md` |
 | **#48** | SMTP: "esqueci minha senha" não entrega nada em produção |
