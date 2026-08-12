@@ -114,4 +114,26 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Confronto da senha com vazamentos conhecidos
+    |--------------------------------------------------------------------------
+    |
+    | Liga o `uncompromised()` da política de senha (AppServiceProvider), que
+    | consulta a API do Have I Been Pwned. Existe como chave de configuração,
+    | e não como um `if` sobre o ambiente, por um motivo prático: assim a
+    | suíte consegue LIGAR a verificação num teste e exercitar o caminho de
+    | produção com o HTTP falsificado, em vez de deixá-lo sem cobertura.
+    |
+    | O phpunit.xml desliga por padrão nos testes — a verificação falha aberta,
+    | então uma oscilação de rede no CI faria a suíte aprovar qualquer senha e
+    | continuar verde.
+    |
+    */
+
+    'checar_senha_vazada' => filter_var(
+        env('AUTH_CHECAR_SENHA_VAZADA', true),
+        FILTER_VALIDATE_BOOLEAN,
+    ),
+
 ];

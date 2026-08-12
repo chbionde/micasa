@@ -11,16 +11,28 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/user', fn (Request $request) => UserResource::make(
-        $request->user()->load('activeHousehold')
-    ));
+    // A partir do Laravel 11 o grupo `api` não traz mais `throttle:api`, então
+    // rota sem limite declarado é rota SEM limite nenhum. Aqui não sobra
+    // nenhuma: leitura leva teto folgado, e o que confere senha leva teto
+    // apertado (limitadores em AppServiceProvider).
+    Route::middleware('throttle:conta-leitura')->group(function () {
+        Route::get('/user', fn (Request $request) => UserResource::make(
+            $request->user()->load('activeHousehold')
+        ));
 
-    Route::get('/households', [HouseholdController::class, 'index']);
-    Route::put('/user/active-household', [HouseholdController::class, 'switchActive']);
+        Route::get('/households', [HouseholdController::class, 'index']);
+        Route::put('/user/active-household', [HouseholdController::class, 'switchActive']);
+    });
 
-    Route::patch('/user/profile', [AccountController::class, 'updateProfile']);
-    Route::put('/user/password', [AccountController::class, 'updatePassword']);
-    Route::delete('/user', [AccountController::class, 'destroy']);
+    // As três conferem senha: as duas últimas por `current_password`, e a
+    // primeira desde que passou a exigi-la para trocar o e-mail. Sem limite,
+    // são um oráculo de força bruta — e `updateProfile` era, além disso, um
+    // verificador ilimitado de quais e-mails têm conta, pela regra `unique`.
+    Route::middleware('throttle:conta-sensivel')->group(function () {
+        Route::patch('/user/profile', [AccountController::class, 'updateProfile']);
+        Route::put('/user/password', [AccountController::class, 'updatePassword']);
+        Route::delete('/user', [AccountController::class, 'destroy']);
+    });
 
     // scopeBindings: convite e membro precisam pertencer à casa da URL,
     // senão 404 — proteção contra IDOR pela própria resolução de rota.
