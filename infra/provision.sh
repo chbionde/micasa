@@ -328,16 +328,15 @@ mkdir -p "${APP_DIR}/web/dist"
   > "${APP_DIR}/web/dist/index.html"
 chown -R "${DEPLOY_USER}:www-data" "${APP_DIR}/web/dist"
 
-sed -e "s|__DOMINIO__|${DOMINIO}|g" \
-    -e "s|__PHP_VERSION__|${PHP_VERSION}|g" \
-    -e "s|__APP_DIR__|${APP_DIR}|g" \
-    "${APP_DIR}/infra/nginx/micasa.conf.template" > /etc/nginx/sites-available/micasa
-
-ln -sf /etc/nginx/sites-available/micasa /etc/nginx/sites-enabled/micasa
-rm -f /etc/nginx/sites-enabled/default
-
-nginx -t
-systemctl reload nginx
+# Delegado ao aplicar-nginx.sh para haver UM lugar que sabe montar o site do
+# nginx. Quando este trecho era próprio daqui, atualizar a configuração de uma
+# VPS já provisionada significava rodar o provisionamento inteiro de novo, ou
+# reproduzir estes comandos de cabeça — e esquecer o certbot install deixava o
+# site em HTTP.
+#
+# --sem-tls porque numa máquina nova o certificado ainda não existe: quem cuida
+# dele é a seção 9, logo abaixo.
+DOMINIO="${DOMINIO}" "${APP_DIR}/infra/aplicar-nginx.sh" --sem-tls
 
 # ---------------------------------------------------------------------------
 # 9. Fila e scheduler

@@ -11,6 +11,8 @@ Runbook da VPS do MiCasa. Decisões que embasam este diretório: **ADR-003** (Or
 | `backup.sh` | Roda **por cron, diariamente**. Cópia consistente do SQLite → gzip → `age` → Backblaze B2. |
 | `restaurar.sh` | Roda **à mão, fora da VPS**. Decifra um backup e prova que o banco abre. |
 | `limpar-banco.sh` | Roda **à mão, raramente**. Apaga TODOS os dados da aplicação. Destrutivo. |
+| `aplicar-nginx.sh` | Roda **à mão, quando `infra/nginx/` mudar**. O deploy automático não toca no nginx. |
+| `nginx/cabecalhos-seguranca.conf` | Cabeçalhos de segurança, num lugar só. Incluído pelas locations do site. |
 | `nginx/micasa.conf.template` | Site do nginx. O `provision.sh` substitui os `__PLACEHOLDER__`. |
 | `systemd/micasa-queue.service` | Worker da fila. |
 | `cron/micasa-scheduler` | Entrada única de cron do scheduler do Laravel. |
@@ -102,6 +104,20 @@ cd /var/www/micasa && ./infra/deploy.sh
 
 Não é preciso recarregar o nginx para o front: são arquivos estáticos, servidos direto do disco.
 
+### ⚠️ Mudança em `infra/nginx/` NÃO sai no deploy
+
+O deploy automático builda o front, faz `rsync` do `dist` e roda o `deploy.sh`. Ele **não encosta no nginx**. Enquanto ninguém aplicar, o repositório diz uma coisa e a produção faz outra — que é exatamente como a #48 nasceu.
+
+Para aplicar, **na VPS**:
+
+```bash
+cd /var/www/micasa && git pull --ff-only && ./infra/aplicar-nginx.sh
+```
+
+O script instala o snippet dos cabeçalhos, regenera o site a partir do template, **restaura o TLS** (regenerar apaga as linhas que o certbot escreveu — sem este passo o site volta em HTTP puro), testa e recarrega. Se o teste falhar, ele repõe a configuração anterior e não recarrega nada.
+
+No fim ele confere os cabeçalhos por HTTP e diz quais chegaram.
+
 ### As credenciais do deploy automático
 
 A Action usa uma chave SSH **dedicada** (`micasa-deploy`), sem passphrase, separada da chave pessoal. A privada vive só nos *Secrets* do repositório; a pública está no `authorized_keys` da VPS com `no-port-forwarding,no-agent-forwarding,no-X11-forwarding`.
@@ -172,6 +188,24 @@ vazamento conhecidas.
 
 O backup do estado anterior só se lê com a chave privada do `age`, que não está na VPS. Para
 voltar atrás, é o mesmo caminho de qualquer restauração: `./infra/restaurar.sh`.
+
+## Cabeçalhos de segurança
+
+Moram em `infra/nginx/cabecalhos-seguranca.conf`, num arquivo só, porque `add_header` no nginx **não é aditivo**: uma `location` com add_header próprio descarta todos os herdados do `server`. São cinco cabeçalhos que precisariam ser repetidos em três locations — quinze linhas para manter em sincronia à mão, e a primeira que envelhecesse sozinha viraria um buraco silencioso.
+
+Conferir de fora, a qualquer momento:
+
+```bash
+curl -sSI https://micasa-bionde.duckdns.org/ | grep -iE "x-content-type|x-frame|referrer|content-security"
+```
+
+### Sobre a CSP estar em dois cabeçalhos
+
+O que **bloqueia** traz só diretivas medidas como impossíveis de quebrar esta aplicação: `object-src 'none'`, `base-uri 'none'`, `frame-ancestors 'none'`, `form-action 'self'`.
+
+O que só **relata** (`-Report-Only`) é a política estrita. O navegador obedece ao primeiro e apenas reclama no console sobre o segundo. É como se descobre o que a política quebraria **antes** de ela quebrar, num site que publica sozinho a cada merge.
+
+Para promover a estrita a bloqueante, quando o console estiver limpo: no snippet, o conteúdo do `-Report-Only` passa a ser o do `Content-Security-Policy`, e o `-Report-Only` sai.
 
 ## Verificando
 

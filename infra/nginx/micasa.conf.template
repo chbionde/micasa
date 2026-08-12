@@ -30,12 +30,15 @@ server {
     # ARMADILHA DO NGINX: add_header não é aditivo. Um `location` que declare
     # qualquer add_header próprio DESCARTA todos os herdados daqui — o `always`
     # não muda isso, ele só decide se o header vale para respostas de erro.
-    # Por isso os três abaixo aparecem repetidos nas duas locations que definem
-    # Cache-Control. Sem a repetição, o HTML e os assets sairiam sem eles, e a
-    # proteção sobraria só nas respostas JSON, que é onde menos importa.
-    add_header X-Content-Type-Options nosniff always;
-    add_header X-Frame-Options DENY always;
-    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    # Por isso o include aparece repetido nas locations que definem
+    # Cache-Control. Sem a repetição, o HTML e os assets sairiam sem os
+    # cabeçalhos, e a proteção sobraria só nas respostas JSON, que é onde menos
+    # importa.
+    #
+    # O conteúdo mora em infra/nginx/cabecalhos-seguranca.conf: são cinco
+    # cabeçalhos, e mantê-los em três cópias à mão seria pedir para uma delas
+    # envelhecer sozinha.
+    include snippets/micasa-seguranca.conf;
 
     # -----------------------------------------------------------------------
     # Caminhos do servidor — a fronteira do ADR-020.
@@ -64,11 +67,9 @@ server {
     location ~* \.(js|css|woff2?|png|jpe?g|gif|svg|ico|webp)$ {
         expires 1y;
         add_header Cache-Control "public, immutable";
-        # Repetidos porque o add_header acima descarta os do server. Ver o
+        # Repetido porque o add_header acima descarta os do server. Ver o
         # comentário lá em cima.
-        add_header X-Content-Type-Options nosniff always;
-        add_header X-Frame-Options DENY always;
-        add_header Referrer-Policy strict-origin-when-cross-origin always;
+        include snippets/micasa-seguranca.conf;
         access_log off;
         try_files $uri =404;
     }
@@ -84,9 +85,7 @@ server {
     # posto num iframe — sairia sem X-Frame-Options.
     location = /index.html {
         add_header Cache-Control "no-cache";
-        add_header X-Content-Type-Options nosniff always;
-        add_header X-Frame-Options DENY always;
-        add_header Referrer-Policy strict-origin-when-cross-origin always;
+        include snippets/micasa-seguranca.conf;
     }
 
     location ~ /\. {
