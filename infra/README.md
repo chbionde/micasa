@@ -445,7 +445,7 @@ voltar atrás, é o mesmo caminho de qualquer restauração: `./infra/restaurar.
 
 ## Cabeçalhos de segurança
 
-Moram em `infra/nginx/cabecalhos-seguranca.conf`, num arquivo só, porque `add_header` no nginx **não é aditivo**: uma `location` com add_header próprio descarta todos os herdados do `server`. São cinco cabeçalhos que precisariam ser repetidos em três locations — quinze linhas para manter em sincronia à mão, e a primeira que envelhecesse sozinha viraria um buraco silencioso.
+Moram em `infra/nginx/cabecalhos-seguranca.conf`, num arquivo só, porque `add_header` no nginx **não é aditivo**: uma `location` com add_header próprio descarta todos os herdados do `server`. São quatro cabeçalhos que precisariam ser repetidos em três locations — doze linhas para manter em sincronia à mão, e a primeira que envelhecesse sozinha viraria um buraco silencioso.
 
 Conferir de fora, a qualquer momento:
 
@@ -453,13 +453,13 @@ Conferir de fora, a qualquer momento:
 curl -sSI https://micasa-bionde.duckdns.org/ | grep -iE "x-content-type|x-frame|referrer|content-security"
 ```
 
-### Sobre a CSP estar em dois cabeçalhos
+### Sobre a CSP bloqueante
 
-O que **bloqueia** traz só diretivas medidas como impossíveis de quebrar esta aplicação: `object-src 'none'`, `base-uri 'none'`, `frame-ancestors 'none'`, `form-action 'self'`.
+A política completa limita scripts, estilos, imagens, fontes e conexões à própria origem. Também bloqueia plugins, alteração de URL por `<base>`, enquadramento por outros sites e envio de formulários para fora do MiCasa.
 
-O que só **relata** (`-Report-Only`) é a política estrita. O navegador obedece ao primeiro e apenas reclama no console sobre o segundo. É como se descobre o que a política quebraria **antes** de ela quebrar, num site que publica sozinho a cada merge.
+Ela não foi preparada direto em bloqueio. Primeiro ficou em `Content-Security-Policy-Report-Only`; o desenvolvedor navegou pelas telas autenticadas em janela anônima, sem violações, em 12/08/2026. A configuração versionada então promoveu a mesma política para `Content-Security-Policy`. Produção só muda depois de executar `infra/aplicar-nginx.sh` e a conferência final do script passar.
 
-Para promover a estrita a bloqueante, quando o console estiver limpo: no snippet, o conteúdo do `-Report-Only` passa a ser o do `Content-Security-Policy`, e o `-Report-Only` sai.
+Se uma dependência futura precisar de origem externa ou conteúdo inline, não adicione permissões por tentativa. Recoloque primeiro a política candidata em `Report-Only`, navegue pelo fluxo afetado e libere apenas a fonte medida.
 
 ## Verificando
 

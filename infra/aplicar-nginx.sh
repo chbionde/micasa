@@ -73,17 +73,25 @@ log "Aplicando configuração do nginx para ${DOMINIO}"
 # automática, três meses adiante, longe de qualquer suspeito. Por isso o
 # arquivo anterior volta se o teste falhar.
 BACKUP=""
+BACKUP_SNIPPET=""
 if [[ -f "${SITE}" ]]; then
   BACKUP="$(mktemp)"
   ${SUDO} cp "${SITE}" "${BACKUP}"
+fi
+if [[ -f "${SNIPPET_DESTINO}" ]]; then
+  BACKUP_SNIPPET="$(mktemp)"
+  ${SUDO} cp "${SNIPPET_DESTINO}" "${BACKUP_SNIPPET}"
 fi
 
 restaurar_se_falhar() {
   if [[ -n "${BACKUP}" ]]; then
     ${SUDO} cp "${BACKUP}" "${SITE}"
-    aviso "A configuração anterior foi restaurada. O site continua como estava."
   fi
-  rm -f "${BACKUP}"
+  if [[ -n "${BACKUP_SNIPPET}" ]]; then
+    ${SUDO} cp "${BACKUP_SNIPPET}" "${SNIPPET_DESTINO}"
+  fi
+  rm -f "${BACKUP}" "${BACKUP_SNIPPET}"
+  aviso "A configuração anterior foi restaurada. O site continua como estava."
 }
 
 # ---------------------------------------------------------------------------
@@ -134,29 +142,85 @@ ${SUDO} nginx -t || { restaurar_se_falhar; erro "Configuração inválida. NADA 
 log "Recarregando o nginx"
 ${SUDO} systemctl reload nginx
 
-rm -f "${BACKUP}"
+rm -f "${BACKUP}" "${BACKUP_SNIPPET}"
 
 # ---------------------------------------------------------------------------
 # 5. Conferência
 # ---------------------------------------------------------------------------
 log "Conferindo os cabeçalhos em produção"
-CABECALHOS="$(curl -sSI --max-time 15 "https://${DOMINIO}/" 2>/dev/null || true)"
+FALHOU_CONFERENCIA=0
+POLITICA_CSP_ESPERADA="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
 
-if [[ -z "${CABECALHOS}" ]]; then
-  aviso "Não consegui buscar https://${DOMINIO}/ desta máquina. Confira de fora."
-else
-  # `Content-Security-Policy-Report-Only` NÃO casa com `^Content-Security-Policy:`
-  # — depois de "Policy" vem hífen, não dois-pontos. A primeira versão desta
-  # conferência só listava o nome curto e teria dado ✓ com o cabeçalho de relato
-  # ausente. Cada nome é conferido inteiro.
+conferir_resposta() {
+  local rotulo="$1"
+  local url="$2"
+  local status_esperado="$3"
+  local cabecalhos
+  local status
+  local politica
+  local falhou=0
+
+  cabecalhos="$(curl -sS --max-time 15 --dump-header - --output /dev/null \
+    --write-out $'\n__MICASA_STATUS__:%{http_code}\n' "${url}" 2>/dev/null || true)"
+  if [[ -z "${cabecalhos}" ]]; then
+    aviso "${rotulo}: não consegui buscar ${url}."
+    return 1
+  fi
+
+  printf '  %s\n' "${rotulo}"
+  status="$(sed -n 's/^__MICASA_STATUS__://p' <<<"${cabecalhos}" | tail -n 1)"
+  if [[ ! "${status}" =~ ${status_esperado} ]]; then
+    aviso "${rotulo}: status HTTP ${status:-desconhecido}; esperava ${status_esperado}."
+    falhou=1
+  else
+    printf '    ✓ status HTTP %s\n' "${status}"
+  fi
+
   for h in X-Content-Type-Options X-Frame-Options Referrer-Policy \
-           Content-Security-Policy Content-Security-Policy-Report-Only; do
-    if grep -qi "^${h}:" <<<"${CABECALHOS}"; then
-      printf '  ✓ %s\n' "${h}"
+           Content-Security-Policy; do
+    if grep -qi "^${h}:" <<<"${cabecalhos}"; then
+      printf '    ✓ %s\n' "${h}"
     else
-      aviso "${h} NÃO está presente — o include pode não ter pegado nesta location."
+      aviso "${rotulo}: ${h} NÃO está presente."
+      falhou=1
     fi
   done
+
+  politica="$(sed -n 's/^Content-Security-Policy:[[:space:]]*//Ip' <<<"${cabecalhos}" \
+    | tr -d '\r')"
+  if [[ "$(grep -ci '^Content-Security-Policy:' <<<"${cabecalhos}")" -ne 1 ]]; then
+    aviso "${rotulo}: esperava exatamente um cabeçalho Content-Security-Policy."
+    falhou=1
+  elif [[ "${politica}" != "${POLITICA_CSP_ESPERADA}" ]]; then
+    aviso "${rotulo}: a CSP não corresponde à política estrita versionada."
+    falhou=1
+  elif grep -qi '^Content-Security-Policy-Report-Only:' <<<"${cabecalhos}"; then
+    aviso "${rotulo}: Content-Security-Policy-Report-Only ainda está presente."
+    falhou=1
+  else
+    printf '    ✓ política estrita bloqueante, sem Report-Only\n'
+  fi
+
+  return "${falhou}"
+}
+
+conferir_resposta "HTML" "https://${DOMINIO}/" '^200$' || FALHOU_CONFERENCIA=1
+
+PAGINA="$(curl -sS --max-time 15 "https://${DOMINIO}/" 2>/dev/null || true)"
+ASSET="$(grep -oE '/assets/[^"[:space:]]+\.(js|css)' <<<"${PAGINA}" | head -n 1 || true)"
+if [[ -z "${ASSET}" ]]; then
+  aviso "Asset: não encontrei um arquivo JS ou CSS no HTML de produção."
+  FALHOU_CONFERENCIA=1
+else
+  conferir_resposta "Asset" "https://${DOMINIO}${ASSET}" '^200$' || FALHOU_CONFERENCIA=1
+fi
+
+# Sem sessão, /api/user responde 401. Isso é esperado: os cabeçalhos continuam
+# presentes e são o que esta conferência mede.
+conferir_resposta "API" "https://${DOMINIO}/api/user" '^(200|401)$' || FALHOU_CONFERENCIA=1
+
+if [[ ${FALHOU_CONFERENCIA} -ne 0 ]]; then
+  erro "A configuração foi recarregada, mas a conferência externa falhou. Não considere a aplicação concluída."
 fi
 
 log "Pronto."

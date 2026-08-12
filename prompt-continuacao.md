@@ -251,8 +251,8 @@ Pint · Larastan 6 (0 erros) · **162 Pest / 481 asserções** · oxlint · tsc 
 - ✅ Merge na `main` publica sozinho
 - ✅ **O deploy entra como `micasa-deploy`**, conta sem senha cujo único poder de root é rodar
   `/usr/local/sbin/micasa-pos-deploy`. Medido: secret trocado 19:27:04, deploy verde 19:27:52
-- ✅ CSP em produção, em **dois** cabeçalhos: um que bloqueia (`object-src`, `base-uri`,
-  `frame-ancestors`, `form-action`) e um `-Report-Only` com a política estrita
+- 🚧 CSP estrita validada sem violações nas telas autenticadas; promoção para bloqueante em
+  andamento na #53
 - ✅ Backup diário cifrado, restauração testada
 - ✅ fail2ban, Dependabot, secret scanning, `main` protegida
 - ❌ **HSTS ainda ausente** — é a #54, não começada
@@ -325,8 +325,7 @@ linhas que o certbot escreveu, e esquecer isso devolve o site em HTTP puro sem e
 
 | Issue | O que é | Estado real |
 |---|---|---|
-| **#62** | Preparar o Codex para continuar o MiCasa | **Em andamento.** Skills instaladas e documentação preparada; não iniciar outra issue antes do merge |
-| **#53** | CSP ausente | Código no ar em modo relato. **Falta só o dev conferir o console numa janela anônima.** A aplicação está limpa — medido: HTML e CSS de produção sem nenhuma referência externa. A violação que ele viu era extensão do navegador dele |
+| **#53** | CSP ausente | Validação em modo relato concluída sem violações; promoção da política estrita para bloqueante em andamento |
 | **#54** | HSTS ausente | **Não começada.** Critério de aceite já ajustado: fecha em `max-age=2592000` (30 dias), com a subida para um ano como passo posterior sem dono |
 | **#55** | Chave de deploy com poder de root | **Quase fechada.** Passos 1–6 feitos e verificados; falta o **passo 7** (remover a chave de deploy antiga do `authorized_keys` do `ubuntu`), reescrito no `infra/README.md` sem depender do `nano` |
 | **#48** | SMTP não entrega em produção | Não começada |
@@ -368,8 +367,7 @@ o momento natural é ao fim da #48.
   distintos e não há filtro de `paths:`
 - Object Lock no B2 — gatilho: existir volume real
 - Rotação da credencial do B2 com `validDurationSeconds`
-- A promoção da CSP estrita a bloqueante é **uma linha** em
-  `infra/nginx/cabecalhos-seguranca.conf`, depois que o console estiver limpo
+- Aplicar a configuração bloqueante da #53 na VPS depois do merge e conferir os cabeçalhos
 
 ### Já resolvido — não peça de novo (protocolo B5)
 - ✅ Banco de produção limpo, com backup cifrado tirado antes

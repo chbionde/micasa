@@ -50,7 +50,7 @@ Dito primeiro, porque a ausência é o que costuma virar falsa sensação de cob
   o único cuja publicação valia esperar a correção.
 - **A11 e A12** — auditoria no CI e validação em FormRequest.
 - **A13** — corrigido, mas não do jeito que o achado sugeria. Ver a análise no item.
-- **A8, A9 e A10** — em sub-issues, porque qualquer pessoa já os enxerga de fora (CSP e HSTS se
+- **A9 e A10** — em sub-issues, porque qualquer pessoa já os enxerga de fora (HSTS se
   medem com `curl -D-`) ou porque exigem posição já privilegiada (a chave de deploy).
 
 ### ✅ A1 — Trocar o e-mail não exigia a senha atual · **Alta** — CORRIGIDO
@@ -216,7 +216,7 @@ existe** — são 3 casas, com 1 membro cada.
 **Situação:** Corrigido nesta issue: `DeleteAccount` passou a apagar as sessões e o token de redefinição
 pendente, dentro da mesma transação que apaga a conta.
 
-### ❌ A8 — Sem `Content-Security-Policy` · **Média**
+### 🚧 A8 — Sem `Content-Security-Policy` · **Média** — CORREÇÃO PREPARADA
 
 Medido nos cabeçalhos reais de produção em 12/08/2026. Presentes: `X-Content-Type-Options`,
 `X-Frame-Options: DENY`, `Referrer-Policy`. Ausente: CSP.
@@ -225,6 +225,12 @@ Medido nos cabeçalhos reais de produção em 12/08/2026. Presentes: `X-Content-
 não há `dangerouslySetInnerHTML` em lugar nenhum do `web/src`, e não há nada em `localStorage`.
 Não há XSS conhecido para a CSP conter. Ela vale como a rede embaixo do trapézio — o dia em que
 um XSS aparecer é tarde para instalá-la.
+
+**Situação:** a #53 mediu a política estrita em `Report-Only` nas telas autenticadas e, sem
+violações, preparou sua promoção a bloqueante. A última medição anterior à aplicação manual
+ainda mostrava `Report-Only`; o achado só está corrigido em produção depois que
+`infra/aplicar-nginx.sh` conferir HTML, asset e API. A política preparada restringe scripts,
+estilos, imagens, fontes e conexões à própria origem e bloqueia plugins, `<base>` e enquadramento.
 
 ### ❌ A9 — Sem `Strict-Transport-Security` · **Baixa**
 
