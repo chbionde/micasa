@@ -44,9 +44,14 @@ Dito primeiro, porque a ausência é o que costuma virar falsa sensação de cob
 
 ## 2. Achados
 
-13 achados. **7 fechados na própria #43** — o bloco de conta e sessão, A1 a A7, que era o
-único não observável de fora e por isso o único cuja publicação valia esperar. Os 6 restantes
-seguem em aberto: A8, A9 e A10 em sub-issues, e A11 a A13 numa segunda PR desta issue.
+13 achados. **10 fechados** dentro da própria #43; 3 seguem em sub-issues.
+
+- **A1 a A7** — bloco de conta e sessão. Era o único conjunto não observável de fora, e por isso
+  o único cuja publicação valia esperar a correção.
+- **A11 e A12** — auditoria no CI e validação em FormRequest.
+- **A13** — corrigido, mas não do jeito que o achado sugeria. Ver a análise no item.
+- **A8, A9 e A10** — em sub-issues, porque qualquer pessoa já os enxerga de fora (CSP e HSTS se
+  medem com `curl -D-`) ou porque exigem posição já privilegiada (a chave de deploy).
 
 ### ✅ A1 — Trocar o e-mail não exigia a senha atual · **Alta** — CORRIGIDO
 
@@ -245,7 +250,7 @@ Portanto: quem obtiver o secret `SSH_PRIVATE_KEY` do GitHub tem root na produç�
 para "controle da aplicação". Não elimina o segundo — a chave abre um shell e o `deploy.sh` faz
 `git pull`. É mitigação real, não conserto.
 
-### ❌ A11 — `composer audit` e `npm audit` não rodam no CI · **Baixa**
+### ✅ A11 — `composer audit` e `npm audit` não rodavam no CI · **Baixa** — CORRIGIDO
 
 Estado hoje, medido em 12/08/2026: **0 vulnerabilidades** dos dois lados. O risco não é o
 presente, é o silêncio no dia em que aparecer um aviso.
@@ -253,19 +258,59 @@ presente, é o silêncio no dia em que aparecer um aviso.
 O bloqueio registrado na issue #43 — filtro de `paths:` e dois jobs chamados `quality` —
 **deixou de existir** com o merge da #49. O item está liberado.
 
-### ℹ️ A12 — Validação inline no `PasswordResetController`
+**Situação:** corrigido. Um passo de auditoria em cada workflow.
+
+**Troca consciente, declarada:** o `composer audit` **não tem corte por severidade** — reprova
+com qualquer aviso. Um aviso publicado de madrugada deixa o CI vermelho numa PR que não tem
+nada a ver com dependência. Aceito de propósito: num projeto de 5 h por semana, alerta que não
+bloqueia é alerta que se ignora. Já o `npm audit` roda com corte em `high`, porque a árvore do
+front é ordens de grandeza maior e quase todo aviso moderado dela cai em pacote de build que
+nunca vê entrada de usuário — sem o corte, o CI ficaria vermelho por ruído, que é o mesmo
+fracasso pelo outro lado.
+
+Isto **não substitui o Dependabot**, que já estava ligado. Ele avisa depois que a dependência
+entrou; o CI pega antes, no momento em que ela entraria. Mesma base de avisos, momentos
+diferentes.
+
+### ✅ A12 — Validação inline no `PasswordResetController` — CORRIGIDO
 
 `sendLink` e `reset` usam `$request->validate([...])` direto. O checklist do Revisor de Código
 no `prompt-casa-os.md` pede validação em FormRequest, e todo o resto do projeto obedece. Desvio
 de padrão, sem risco associado.
 
-### ℹ️ A13 — `switchActive` distingue casa inexistente de casa alheia
+**Situação:** corrigido, com `SendResetLinkRequest` e `ResetPasswordRequest`. Valor de segurança:
+**zero** — é consistência, para a validação morar sempre no mesmo lugar. O único comportamento
+novo é um teto de tamanho em `email` e `token`, que não existia; ganhou teste.
 
-Medido: casa que existe mas não é minha responde `"Você não faz parte desta casa."`; id
-inexistente responde `"O valor selecionado para o campo casa é inválido."`. Ambos 422.
+### ✅ A13 — `switchActive` distinguia casa inexistente de casa alheia — CORRIGIDO
 
-Permite descobrir quais ids de casa existem. Não vaza nome, membro nem conteúdo — o que se
-aprende é o tamanho do sistema.
+Medido antes da correção: casa que existe mas não é minha respondia `"Você não faz parte desta
+casa."`; id inexistente respondia `"O valor selecionado para o campo casa é inválido."`. Ambos
+422. A diferença permitia a um usuário autenticado descobrir quais ids de casa existem — não o
+nome, não quem mora, não o conteúdo; só o tamanho do sistema.
+
+**Situação:** corrigido, mas **não** do jeito que o achado sugeria.
+
+A correção óbvia seria usar `"Você não faz parte desta casa"` nos dois casos. Isso fecharia a
+enumeração **mentindo**: quem tivesse um id de casa velho, de uma casa já apagada, leria que
+não faz parte de algo que não existe, e sairia atrás de quem administra o nada. Trocar mensagem
+verdadeira por falsa para esconder um número é segurança de fachada paga em confusão de usuário
+real.
+
+A escolha não era binária. A mensagem única passou a ser:
+
+> Não foi possível ativar esta casa. Atualize a página para ver suas casas atuais.
+
+Verdadeira nos dois casos, idêntica nos dois casos, e diz o que fazer — que no caso legítimo
+(cliente com lista de casas velha) é exatamente o certo.
+
+O texto mora numa constante em `SwitchActiveHousehold::INDISPONIVEL`, usada tanto pela action
+quanto pela mensagem do `exists` no FormRequest. Duas cópias do mesmo texto envelheceriam em
+separado, e a diferença entre elas é justamente o que reabriria o vazamento.
+
+Dois testes em `tests/Feature/Security/VarreduraTest.php`: um compara as respostas **inteiras**
+(status, chaves e mensagens) dos dois casos, e o outro garante que a mensagem não voltou a
+afirmar que a casa existe.
 
 ---
 

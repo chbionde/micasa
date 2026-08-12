@@ -188,3 +188,40 @@ it('nenhuma resposta autenticada carrega hash de senha ou remember_token', funct
             ->and($corpo)->not->toContain('$2y$');
     }
 });
+
+// ------------------------------------------------------------- enumeração
+
+/*
+ * Achado A13 da #43. A mensagem de "casa que não existe" era diferente da de
+ * "casa que existe mas não é sua", e a diferença dizia a um usuário
+ * autenticado quais ids de casa existem.
+ *
+ * O teste compara as duas respostas inteiras, não só o texto: status, chaves
+ * e mensagens. Qualquer canal que volte a separar os dois casos fica vermelho.
+ */
+it('responde igual para casa inexistente e casa alheia', function () {
+    $forasteiro = User::factory()->create();
+    $alheia = casaVarredura();
+
+    $existente = $this->actingAs($forasteiro)
+        ->putJson('/api/user/active-household', ['household_id' => $alheia->id]);
+
+    $inexistente = $this->actingAs($forasteiro)
+        ->putJson('/api/user/active-household', ['household_id' => 999_999]);
+
+    expect($inexistente->status())->toBe($existente->status())
+        ->and($inexistente->json())->toBe($existente->json());
+});
+
+it('a mensagem de casa indisponível não afirma que a casa existe', function () {
+    $forasteiro = User::factory()->create();
+
+    $resposta = $this->actingAs($forasteiro)
+        ->putJson('/api/user/active-household', ['household_id' => 999_999]);
+
+    // Fechar a enumeração dizendo "você não faz parte desta casa" sobre uma
+    // casa apagada seria trocar mensagem verdadeira por falsa.
+    expect($resposta->json('errors.household_id.0'))
+        ->not->toContain('não faz parte')
+        ->and($resposta->json('errors.household_id.0'))->toContain('Atualize a página');
+});

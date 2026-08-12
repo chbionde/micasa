@@ -28,6 +28,18 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
+      # Mesma ideia do ci-api.yml, com uma diferença que vale saber: o npm TEM
+      # corte por severidade, e aqui ele está em `high`. Baixa e moderada não
+      # reprovam.
+      #
+      # O corte existe porque a árvore de dependências do front é ordens de
+      # grandeza maior que a do PHP, e quase todo aviso moderado dela cai em
+      # pacote de build que nunca vê entrada de usuário. Sem o corte, o CI
+      # ficaria vermelho por ruído e a gente aprenderia a ignorá-lo — que é
+      # exatamente o fracasso que este passo tenta evitar.
+      - name: Auditoria de dependências
+        run: npm audit --audit-level=high
+
       - name: Oxlint
         run: npm run lint
 
