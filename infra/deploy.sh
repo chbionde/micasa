@@ -80,31 +80,37 @@ php artisan route:cache
 php artisan view:cache
 php artisan event:cache
 
-# ---------------------------------------------------------------------------
-# 5. Permissões de escrita
-# ---------------------------------------------------------------------------
 # O WAL do SQLite cria database.sqlite-wal e -shm ao lado do banco, então o
 # grupo precisa de escrita no diretório, não só no arquivo.
 log "Ajustando permissões"
-# sudo porque quem escreve aqui não é só o usuário de deploy: o cron do
-# scheduler e o PHP-FPM rodam como www-data e criam arquivos próprios —
-# storage/logs/laravel-AAAA-MM-DD.log é o caso garantido, o cron cria um por dia.
+# ---------------------------------------------------------------------------
+# 5 e 6. Permissões e reinício dos processos — a parte que exige root
+# ---------------------------------------------------------------------------
+# Os três comandos com root vivem num script root:root instalado pelo
+# provision.sh, e a regra de sudo autoriza ESSE script, sem argumento (#55).
 #
-# chmod exige ser dono do arquivo e falha com EPERM mesmo quando a permissão já
-# está correta: o syscall confere o dono antes de olhar se a mudança seria
-# no-op. Sem sudo, o set -e mata o deploy exatamente aqui — depois das migrations
-# e ANTES do reload do FPM. Com opcache.validate_timestamps=0 isso significa
-# banco migrado e código antigo no ar, com o script aparentando ter funcionado.
-sudo chmod -R g+w storage bootstrap/cache database
+# O motivo de não ser uma regra de sudoers listando os três comandos direto:
+# o sudoers casa a linha de comando literalmente, e `chmod -R g+w storage ...`
+# com caminho RELATIVO seria autorizado em qualquer diretório que tivesse uma
+# pasta `storage` — bastaria um `cd` antes. Ver infra/micasa-pos-deploy.template.
+log "Ajustando permissões e recarregando serviços"
 
-# ---------------------------------------------------------------------------
-# 6. Reinício dos processos
-# ---------------------------------------------------------------------------
-# reload do FPM é obrigatório: com opcache.validate_timestamps=0, o PHP não
-# percebe arquivo novo sozinho. Sem isto o deploy "funciona" e nada muda.
-log "Recarregando serviços"
-sudo systemctl reload "php${PHP_VERSION}-fpm"
-sudo systemctl restart micasa-queue
+POS_DEPLOY="/usr/local/sbin/micasa-pos-deploy"
+
+if [[ -x "${POS_DEPLOY}" ]]; then
+  sudo "${POS_DEPLOY}"
+else
+  # Caminho de transição: numa VPS que ainda não rodou o provisionamento novo,
+  # o script não existe. Cai no jeito antigo para o deploy não quebrar no meio
+  # — mas avisa alto, porque enquanto isto aparecer a chave da Action continua
+  # com sudo irrestrito, que é o buraco da #55.
+  warn_transicao="A conta de deploy ainda usa sudo irrestrito (#55 em aberto)."
+  printf '\033[1;33m[aviso] %s\033[0m\n' "${warn_transicao}"
+  printf '\033[1;33m[aviso] %s\033[0m\n' "Rode o infra/provision.sh na VPS para instalar ${POS_DEPLOY}."
+  sudo chmod -R g+w storage bootstrap/cache database
+  sudo systemctl reload "php${PHP_VERSION}-fpm"
+  sudo systemctl restart micasa-queue
+fi
 
 log "Deploy concluído."
 echo "    Saúde:  curl -sS https://\$(grep -oP '(?<=^APP_URL=https://).*' .env)/up"

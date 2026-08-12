@@ -145,7 +145,12 @@ CABECALHOS="$(curl -sSI --max-time 15 "https://${DOMINIO}/" 2>/dev/null || true)
 if [[ -z "${CABECALHOS}" ]]; then
   aviso "Não consegui buscar https://${DOMINIO}/ desta máquina. Confira de fora."
 else
-  for h in X-Content-Type-Options X-Frame-Options Referrer-Policy Content-Security-Policy; do
+  # `Content-Security-Policy-Report-Only` NÃO casa com `^Content-Security-Policy:`
+  # — depois de "Policy" vem hífen, não dois-pontos. A primeira versão desta
+  # conferência só listava o nome curto e teria dado ✓ com o cabeçalho de relato
+  # ausente. Cada nome é conferido inteiro.
+  for h in X-Content-Type-Options X-Frame-Options Referrer-Policy \
+           Content-Security-Policy Content-Security-Policy-Report-Only; do
     if grep -qi "^${h}:" <<<"${CABECALHOS}"; then
       printf '  ✓ %s\n' "${h}"
     else

@@ -167,13 +167,16 @@ php artisan migrate:fresh --force
 # scheduler rodam como www-data. Sem isto, o site volta com "attempt to write a
 # readonly database".
 #
-# O comando é LETRA POR LETRA o mesmo do deploy.sh, inclusive os alvos que este
-# script não precisaria tocar. Motivo: a issue #55 vai trocar o sudo irrestrito
-# do usuário de deploy por uma regra limitada aos comandos exatos do deploy.sh.
-# Uma variação aqui — mesmo `chmod -R g+w database` sozinho — deixaria de casar
-# com a regra e este script quebraria no dia da troca, longe de quem a fez.
+# Chama o MESMO script de pós-deploy que o deploy.sh chama (#55). Quando esta
+# parte era um `sudo chmod` próprio, ela dependia de casar letra por letra com
+# a regra de sudoers do deploy — e qualquer variação quebraria aqui, longe de
+# quem tivesse mexido na regra. Agora não há o que casar: é a mesma chamada.
 log "Ajustando permissões"
-if ! sudo -n chmod -R g+w storage bootstrap/cache database 2>/dev/null; then
+POS_DEPLOY="/usr/local/sbin/micasa-pos-deploy"
+COMANDO_PERMISSOES=("sudo" "-n" "chmod" "-R" "g+w" "storage" "bootstrap/cache" "database")
+[[ -x "${POS_DEPLOY}" ]] && COMANDO_PERMISSOES=("sudo" "-n" "${POS_DEPLOY}")
+
+if ! "${COMANDO_PERMISSOES[@]}" 2>/dev/null; then
   # -n para não pendurar esperando senha num script que já apagou o banco.
   # Isto NÃO é passo informativo: sem a permissão, o site volta sem escrita.
   printf '\n'

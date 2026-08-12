@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+#
+# MiCasa — os passos do deploy que exigem root.
+#
+# ATENÇÃO: este arquivo NÃO é o que roda. O que roda é a cópia instalada em
+# /usr/local/sbin/micasa-pos-deploy, gerada daqui pelo infra/provision.sh com os
+# caminhos já substituídos. Editar a cópia direto no servidor é edição que se
+# perde no próximo provisionamento.
+#
+# ---------------------------------------------------------------------------
+# Por que este arquivo existe (issue #55)
+# ---------------------------------------------------------------------------
+# O deploy.sh precisa de três coisas que só root faz: ajustar permissões de
+# grupo e reiniciar dois serviços. Antes, ele chamava `sudo` três vezes, e o
+# usuário de deploy tinha sudo IRRESTRITO — quem obtivesse a chave da Action
+# tinha root na máquina.
+#
+# A correção óbvia seria uma regra de sudoers listando os três comandos. Ela
+# tem uma armadilha: o sudoers casa a linha de comando LITERALMENTE, e o
+# deploy.sh chamava `chmod -R g+w storage bootstrap/cache database` com
+# caminhos RELATIVOS. Uma regra que autorize isso autoriza o mesmo chmod em
+# qualquer diretório onde exista uma pasta chamada `storage` — basta um `cd`
+# antes. A regra pareceria restrita e não seria.
+#
+# Por isso a autorização é para ESTE script, sem argumento nenhum. Os caminhos
+# são absolutos e ficam gravados aqui dentro, fora do alcance de quem chama.
+# O arquivo é root:root 0755: o usuário de deploy executa e não escreve — se
+# escrevesse, reescreveria o script e teria root de volta.
+
+set -Eeuo pipefail
+
+APP_DIR="__APP_DIR__"
+PHP_VERSION="__PHP_VERSION__"
+
+log() { printf '\033[1;32m    [root] %s\033[0m\n' "$*"; }
+
+# O WAL do SQLite cria database.sqlite-wal e -shm ao lado do banco, e quem
+# escreve neles não é só o usuário de deploy: o PHP-FPM e o cron do scheduler
+# rodam como www-data. Sem escrita de grupo, o site volta com "attempt to write
+# a readonly database".
+#
+# chmod exige ser dono do arquivo e falha com EPERM mesmo quando a permissão já
+# está correta — o syscall confere o dono antes de olhar se a mudança seria
+# no-op. É por isso que este passo precisa de root, e não porque alguém
+# escolheu assim.
+log "Ajustando permissões de escrita do grupo"
+chmod -R g+w \
+  "${APP_DIR}/api/storage" \
+  "${APP_DIR}/api/bootstrap/cache" \
+  "${APP_DIR}/api/database"
+
+# Com opcache.validate_timestamps=0, o PHP não percebe arquivo novo sozinho.
+# Sem o reload, o deploy "funciona" e nada muda.
+log "Recarregando o PHP-FPM"
+systemctl reload "php${PHP_VERSION}-fpm"
+
+log "Reiniciando a fila"
+systemctl restart micasa-queue

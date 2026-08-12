@@ -13,6 +13,7 @@ Runbook da VPS do MiCasa. Decisões que embasam este diretório: **ADR-003** (Or
 | `limpar-banco.sh` | Roda **à mão, raramente**. Apaga TODOS os dados da aplicação. Destrutivo. |
 | `aplicar-nginx.sh` | Roda **à mão, quando `infra/nginx/` mudar**. O deploy automático não toca no nginx. |
 | `nginx/cabecalhos-seguranca.conf` | Cabeçalhos de segurança, num lugar só. Incluído pelas locations do site. |
+| `micasa-pos-deploy.template` | Os três passos do deploy que exigem root. Instalado em `/usr/local/sbin/`. |
 | `nginx/micasa.conf.template` | Site do nginx. O `provision.sh` substitui os `__PLACEHOLDER__`. |
 | `systemd/micasa-queue.service` | Worker da fila. |
 | `cron/micasa-scheduler` | Entrada única de cron do scheduler do Laravel. |
@@ -131,7 +132,77 @@ gh secret set SSH_PRIVATE_KEY < /tmp/micasa-deploy
 rm -f /tmp/micasa-deploy*
 ```
 
-**O que essa chave pode fazer:** ela entra como o usuário `ubuntu`, que tem `sudo`. Quem obtiver o conteúdo do secret tem controle da VPS. Reduzir isso para um usuário dedicado com `sudo` restrito aos três comandos do deploy está registrado na issue de segurança.
+**O que essa chave pode fazer:** ela entra como `micasa-deploy`, uma conta separada da sua, sem senha e com `sudo` autorizado a **um** comando: `/usr/local/sbin/micasa-pos-deploy`.
+
+Seja honesto sobre o ganho: isso reduz o pior caso de *"root na máquina"* para *"controle da aplicação"*. **Não elimina o segundo** — a chave abre um shell e o `deploy.sh` faz `git pull`. Consertar isso seria outra arquitetura de deploy (artefato assinado, servidor puxando em vez de recebendo), e não se justifica neste projeto hoje.
+
+### Por que um script, e não três comandos no sudoers
+
+A regra óbvia seria listar os três comandos do `deploy.sh`. O sudoers casa a linha de comando **literalmente**, e o `deploy.sh` chamava `chmod -R g+w storage bootstrap/cache database` com caminhos **relativos** — uma regra que autorize isso autoriza o mesmo `chmod` em qualquer diretório onde exista uma pasta `storage`, bastando um `cd` antes. A regra pareceria restrita e não seria.
+
+Por isso a autorização é para o script, **sem argumento nenhum**. Os caminhos são absolutos e ficam dentro dele, que é `root:root 0755` — a conta de deploy executa e não escreve. Se escrevesse, reescreveria o script e teria root de volta.
+
+### Migrando uma VPS que já existe (#55)
+
+A ordem importa: **não remova o acesso antigo antes de o novo funcionar.** Um passo por vez, conferindo a saída de cada um.
+
+**1. Atualizar o código e provisionar** (na VPS, com o seu usuário):
+
+```bash
+cd /var/www/micasa && git pull --ff-only && sudo ./infra/provision.sh
+```
+
+Espere ver `Criando o usuário de deploy micasa-deploy` e `Escrevendo a regra de sudo do deploy`.
+
+**2. Conferir que o sudo da conta nova é mesmo restrito:**
+
+```bash
+sudo -u micasa-deploy sudo -l
+```
+
+Tem de listar `/usr/local/sbin/micasa-pos-deploy` e **nada mais**. Se listar `(ALL) ALL`, pare — a regra não pegou.
+
+**3. Dar a chave de deploy à conta nova.** Gere um par novo (aproveite para rotacionar) e autorize só a conta de deploy:
+
+```bash
+# na sua máquina
+ssh-keygen -t ed25519 -N "" -C "micasa-deploy (github actions)" -f /tmp/micasa-deploy
+cat /tmp/micasa-deploy.pub
+```
+
+Na VPS, com a pública que apareceu acima:
+
+```bash
+sudo tee -a /home/micasa-deploy/.ssh/authorized_keys <<< 'COLE-A-PUBLICA-AQUI'
+sudo chown micasa-deploy:micasa-deploy /home/micasa-deploy/.ssh/authorized_keys
+sudo chmod 600 /home/micasa-deploy/.ssh/authorized_keys
+```
+
+**4. Passar o dono do diretório da aplicação para a conta nova:**
+
+```bash
+sudo chown -R micasa-deploy:www-data /var/www/micasa
+```
+
+**5. Atualizar os secrets do GitHub:**
+
+```bash
+# na sua máquina
+gh secret set SSH_PRIVATE_KEY < /tmp/micasa-deploy
+gh secret set SSH_USER --body micasa-deploy
+rm -f /tmp/micasa-deploy*
+```
+
+**6. Testar o deploy** pelo botão *Run workflow* na aba Actions. Ele tem de terminar verde, **sem** a linha `A conta de deploy ainda usa sudo irrestrito`.
+
+**7. Só depois de o passo 6 passar**, remova a chave de deploy antiga do seu usuário:
+
+```bash
+# na VPS: apague de ~/.ssh/authorized_keys a linha com o comentário "micasa-deploy"
+nano ~/.ssh/authorized_keys
+```
+
+⚠️ Sua chave **pessoal** fica. É ela que te dá acesso administrativo — e é a única forma de voltar se algo der errado.
 
 ## Backup
 
