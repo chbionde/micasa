@@ -134,12 +134,10 @@ SSH_AUTH_SOCK=/tmp/micasa-agent.sock ssh ubuntu@167.126.4.86
 
 ### 🚧 Limite do ambiente do agente
 
-**O classificador de permissões do Claude Code bloqueia comandos que alteram estado na VPS.**
-Leitura e diagnóstico passam (inclusive `sudo iptables -S`, `certbot renew --dry-run`, `sqlite3`
-no banco). Escrita não.
-
-**Planeje em torno disso:** o diagnóstico é seu; a mudança vai como **passo a passo para o dev**,
-e você confere depois por leitura. Não tente contornar.
+O bloqueio de escrita na VPS descrito nas sessões anteriores era específico do **Claude Code**.
+Ele não deve ser presumido para outro agente: confira as permissões da sessão atual antes de
+planejar. Mesmo quando a escrita for tecnicamente possível, produção só pode ser alterada dentro
+do escopo explícito da issue e depois de diagnóstico, plano de reversão e verificação.
 
 ### 🪤 A armadilha que mais custou tempo
 
@@ -190,7 +188,7 @@ em HTTP puro — com `SESSION_SECURE_COOKIE=true`, ninguém consegue entrar.
   com heredoc. O corpo explica *por quê*, não *o quê*
 - **Documento didático** em `docs/aprendizado/NN-titulo.md` ao fim de toda tarefa multi-comando,
   escrito **para leigo**: o que foi feito, como replicar, para que serve, e quão comum é no
-  mercado. **O próximo é o 13**
+  mercado. **O próximo é o 14**
 - **Modo tutor de React obrigatório** em toda entrega de front: por que essa escolha aqui, e qual
   seria a alternativa
 - Ele **valoriza que você segure o merge** quando a issue não está de fato resolvida
@@ -328,37 +326,38 @@ está usando?"*, parando para investigar se não. Isso nunca foi feito.
 
 ### Memória
 
-Se o seu assistente tiver memória persistente, os fatos da seção 7 são o ponto de partida.
-**Mantenha-a alinhada com este arquivo** — memória desatualizada é o modo de falha que este
-projeto já pagou caro: um documento anterior envelheceu escondido, nunca passou por revisão, e
-acumulou afirmações falsas que viraram base de decisão por dias.
+O Codex recebe as regras do MiCasa pelo `AGENTS.md` versionado na raiz. Esse arquivo aponta para
+as fontes certas e não copia fatos mutáveis. Estado de issue, PR, CI e produção deve ser medido
+novamente; lições duráveis entram nestes documentos por issue e PR.
 
-Se **não** tiver memória, este arquivo mais o `prompt-continuacao.md` cobrem o essencial.
+As oito memórias em `~/.claude/projects/-home-carlosbionde-code-micasa/memory/` ficam somente
+como histórico. Elas não são copiadas para o Codex porque já contêm fatos ultrapassados. Se uma
+lição ainda for verdadeira, ela deve ser promovida para a documentação versionada.
 
-### Skills (específico do Claude Code)
+### Skills
 
-41 skills instaladas em `~/.claude/skills/`, vindas de `mattpocock/skills` e
-`juliusbrussee/caveman`. As mais usadas neste projeto: `grilling`, `tdd`, `research`,
-`domain-modeling`, `diagnosing-bugs`, `codebase-design`, `wizard`.
+O Codex tem 31 skills compatíveis e estáveis instaladas em `~/.codex/skills/`, vindas de
+`mattpocock/skills` e `juliusbrussee/caveman`, fixadas por commit e sem atualização automática.
+Os commits, a seleção e o procedimento de reinstalação estão em
+`docs/aprendizado/13-migracao-claude-code-para-codex.md`.
 
-Três coisas que se aprendeu do jeito difícil:
+Regras importantes:
 
 1. **Skill nova só é descoberta ao iniciar sessão.** Instalar no meio de uma sessão não a torna
    chamável
-2. **O binário `claude` que o WSL enxerga é o do Windows**
-   (`/mnt/c/Users/carlo/AppData/Roaming/npm/claude`). Por isso `claude plugins install` rodado do
-   WSL instala no perfil errado — as skills daqui foram instaladas **copiando pastas** para
-   `~/.claude/skills/`
-3. O `code-review` do pocock foi deliberadamente **não** instalado: colide com o embutido
-
-**Se você usa outra ferramenta de IA:** nada aqui é obrigatório. O que importa é o
-comportamento das seções 6 e 7, não o mecanismo.
+2. O `code-review` de Matt Pocock foi deliberadamente **não** instalado: colide com a revisão já
+   disponível no ambiente
+3. O CLI/proxy do Caveman não foi instalado, e a skill `caveman` só pode ser ativada por pedido
+   explícito do desenvolvedor
+4. `setup-matt-pocock-skills` está instalada como referência, mas não deve ser executada: o
+   MiCasa já tem tracker, labels, domínio e ADRs próprios
 
 ### Configuração do projeto
 
 - `.claude/settings.local.json` — permissões locais, **não versionado**
-- Não existe `CLAUDE.md` neste repositório. O papel dele é feito por `prompt-casa-os.md`
-  (contrato) e `prompt-continuacao.md` (estado e protocolos)
+- `AGENTS.md` — entrada nativa e versionada do Codex
+- Não existe `CLAUDE.md` neste repositório. O contrato continua em `prompt-casa-os.md`, e o
+  estado e os protocolos continuam em `prompt-continuacao.md`
 
 ---
 
@@ -366,6 +365,7 @@ comportamento das seções 6 e 7, não o mecanismo.
 
 | Fonte | Conteúdo |
 |---|---|
+| `AGENTS.md` | Entrada operacional do Codex e ponteiros para as regras do projeto |
 | `prompt-casa-os.md` | Contrato: papéis, agentes, DoD, anti-padrões |
 | `prompt-continuacao.md` | Estado da última sessão e os protocolos anti-erro |
 | **GitHub issues** | Decisões operacionais recentes |
@@ -376,7 +376,7 @@ comportamento das seções 6 e 7, não o mecanismo.
 | `docs/seguranca.md` | Varredura de segurança: 13 achados, o que foi medido e como, e o que **não** foi coberto |
 | `docs/como-executar-e-testar.md` | ⚠️ **Desatualizado** — diz "Fatia 2 em andamento", não menciona backup nem segurança |
 | `infra/README.md` | Runbook da VPS, tabela sintoma→causa, e o modelo de passo a passo |
-| `docs/aprendizado/01..12` | Documentos didáticos. O **12** cobre a varredura de segurança |
+| `docs/aprendizado/01..13` | Documentos didáticos. O **13** cobre a migração para o Codex |
 
 ---
 
@@ -391,6 +391,7 @@ comportamento das seções 6 e 7, não o mecanismo.
 
 | Issue | O que é |
 |---|---|
+| **#62** | Migração controlada do Claude Code para o Codex — issue ativa até o PR ser mergeado |
 | **#53** | CSP — no ar em modo relato; falta o dev conferir o console numa janela anônima |
 | **#54** | HSTS — não começada; fecha em `max-age=2592000` |
 | **#55** | Chave de deploy — passos 1–6 feitos; falta o passo 7 do `infra/README.md` |
@@ -401,10 +402,11 @@ comportamento das seções 6 e 7, não o mecanismo.
 ### Ordem decidida pelo dev
 
 ```
-#53, #54, #55   →   #48 (SMTP)   →   Fatia 2 (#35, #36)
+#62 (onboarding do Codex)   →   #53, #54, #55   →   #48 (SMTP)   →   Fatia 2 (#35, #36)
 ```
 
-### 🚫 Restrição ativa
+### Restrição do Claude revogada
 
-O dev proibiu, em 12/08/2026, **criar qualquer issue nova de infra ou segurança** até fechar o
-que está aberto. Vale até ele liberar. PR não é issue — PRs continuam normais.
+O dev esclareceu em 12/08/2026 que a proibição de criar issues de infra ou segurança era
+exclusiva do Claude Code, devido a issues e PRs desnecessários. Ela **não se aplica ao Codex**.
+Continua valendo a regra geral: criar somente issues e PRs necessários, uma tarefa por vez.
