@@ -10,6 +10,7 @@ Runbook da VPS do MiCasa. Decisões que embasam este diretório: **ADR-003** (Or
 | `deploy.sh` | Roda **a cada** publicação. Atualiza código, dependências, banco e caches. |
 | `backup.sh` | Roda **por cron, diariamente**. Cópia consistente do SQLite → gzip → `age` → Backblaze B2. |
 | `restaurar.sh` | Roda **à mão, fora da VPS**. Decifra um backup e prova que o banco abre. |
+| `limpar-banco.sh` | Roda **à mão, raramente**. Apaga TODOS os dados da aplicação. Destrutivo. |
 | `nginx/micasa.conf.template` | Site do nginx. O `provision.sh` substitui os `__PLACEHOLDER__`. |
 | `systemd/micasa-queue.service` | Worker da fila. |
 | `cron/micasa-scheduler` | Entrada única de cron do scheduler do Laravel. |
@@ -140,6 +141,37 @@ Ele decifra, confere `integrity_check`, conta as linhas de cada tabela e mostra 
 **A retenção de 30 dias é Lifecycle Rule do bucket, não do script.** A chave é Write Only e não tem permissão para apagar — de propósito: nem um invasor com a credencial da máquina apaga o histórico.
 
 **O vigia é quem avisa, não o log.** `BACKUP_PING_URL` é chamada quando o backup termina bem; um observador externo alarma quando a chamada não chega. Se estiver vazia, uma falha passa em silêncio — inclusive a falha de o cron nunca ter rodado, que nenhum log dentro da VPS registraria.
+
+## Limpando o banco
+
+Existe para quando as contas em produção são testes que perderam a validade. **É destrutivo e
+não tem desfazer.**
+
+```bash
+./infra/limpar-banco.sh --conferir    # só mostra o que existe hoje. NÃO apaga
+./infra/limpar-banco.sh               # apaga, depois de backup e confirmação
+```
+
+Sempre rode o `--conferir` primeiro. Se a contagem não bater com o que você espera, você está
+na máquina errada ou o sistema teve uso que você não sabia — nos dois casos, pare.
+
+O que ele faz, nesta ordem, e para de vez em qualquer tropeço:
+
+1. Conta o que existe e mostra na tela.
+2. **Tira um backup cifrado** em `~/backups-antes-de-limpar/`, usando o mesmo `backup.sh --local`
+   do backup diário. Se o backup não sair, ou sair pequeno demais para ser real, **nada é
+   apagado**.
+3. Pede a frase `APAGAR TUDO` por extenso. Um "s" sai por reflexo; uma frase, não.
+4. `php artisan migrate:fresh --force` — derruba e recria as tabelas.
+5. Ajusta as permissões do grupo `www-data`, senão o site volta sem escrita.
+6. Reconta (tem de dar zero) e confere se `/up` responde 200.
+
+Depois disso **todas as contas deixaram de existir**, inclusive a sua. Cadastre-se de novo — e a
+senha terá de passar na política atual: mínimo de 10 caracteres e ausente das listas de
+vazamento conhecidas.
+
+O backup do estado anterior só se lê com a chave privada do `age`, que não está na VPS. Para
+voltar atrás, é o mesmo caminho de qualquer restauração: `./infra/restaurar.sh`.
 
 ## Verificando
 
