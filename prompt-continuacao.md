@@ -308,9 +308,10 @@ linhas que o certbot escreveu, e esquecer isso devolve o site em HTTP puro sem e
   `export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use 22`
 - `sudo` **pede senha** no WSL
 - `git push` emite erro do Git Credential Manager do Windows, mas **funciona**
-- ⚠️ **O classificador de permissões bloqueia comandos que alteram estado na VPS.** Leitura e
-  diagnóstico passam. Planeje: diagnóstico você faz; mudança vai como passo a passo para o dev
-  (formato B2), e você confere depois por leitura. **Não tente contornar.**
+- O bloqueio de comandos que alteravam estado na VPS era uma limitação específica do
+  **Claude Code**. No Codex, verifique as permissões da sessão atual em vez de presumir esse
+  bloqueio. Mesmo quando a escrita for tecnicamente possível, só altere produção dentro do
+  escopo explicitamente autorizado; fora dele, entregue o passo a passo no formato B2.
 - `pgrep -f <padrão>` **casa com a própria linha de comando** — um `pkill -f` derrubou o shell
   da sessão. Use `pgrep -a <programa>`
 - Ferramentas locais disponíveis para teste real: `nginx`, `visudo`, `age`, `sqlite3`,
