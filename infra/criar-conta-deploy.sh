@@ -31,11 +31,21 @@ log()   { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
 aviso() { printf '\033[1;33m[atenção] %s\033[0m\n' "$*"; }
 erro()  { printf '\033[1;31m[erro] %s\033[0m\n' "$*" >&2; exit 1; }
 
+# Duas coisas diferentes, e confundi-las foi um bug:
+#
+#   SUDO      prefixo para ELEVAR um comando. Vazio quando já somos root —
+#             `${SUDO} chmod ...` vira ` chmod ...`, que funciona.
+#   SUDO_BIN  o binário do sudo, para CONSULTAR a política (`sudo -l -U`).
+#             Este nunca pode ser vazio: `"${SUDO_BIN}" -n -l -U` com SUDO vazio vira
+#             ` -n -l -U`, e o shell tenta executar `-n`. Root pode rodar sudo
+#             (root_sudo é ligado por padrão) e não precisa se autenticar.
+SUDO_BIN="$(command -v sudo || true)"
+[[ -n "${SUDO_BIN}" ]] || erro "sudo não encontrado — preciso dele para conferir a política."
+
 if [[ $EUID -eq 0 ]]; then
   SUDO=""
 else
-  command -v sudo >/dev/null || erro "Preciso de root. Rode com: sudo $0"
-  SUDO="sudo"
+  SUDO="${SUDO_BIN}"
 fi
 
 [[ -f "${APP_DIR}/infra/micasa-pos-deploy.template" ]] \
@@ -106,20 +116,66 @@ rm -f "${TMP_SUDO}"
 # ---------------------------------------------------------------------------
 # 4. Conferência
 # ---------------------------------------------------------------------------
+# A primeira versão disto perguntava com `sudo -u micasa-deploy sudo -l`, e
+# falhava SEMPRE — mesmo com tudo configurado certo. O `sudo -l` de dentro
+# rodava COMO a conta de deploy, e `sudo -l` exige que quem invoca se
+# autentique. A conta não tem senha, de propósito. A autenticação era
+# impossível, a saída vinha vazia, e o script acusava um erro que não existia.
+#
+# O jeito certo é perguntar a partir do root, que é quem este script já é:
+# `sudo -l -U conta comando` consulta a política PARA outra conta, sem que ela
+# precise se autenticar, e sai com 1 se o comando não for permitido (man sudo).
+# O -n garante que nada fique pendurado esperando entrada.
 log "Conferindo o que a conta de deploy pode fazer com sudo"
-PERMISSOES="$(${SUDO} -u "${USUARIO_DEPLOY}" sudo -l 2>/dev/null || true)"
 
-if grep -q "${POS_DEPLOY}" <<<"${PERMISSOES}"; then
-  printf '  ✓ autorizada em %s\n' "${POS_DEPLOY}"
+mostrar_evidencia() {
+  printf '\n    ---- conteúdo de %s\n' "${REGRA_SUDO}"
+  ${SUDO} cat "${REGRA_SUDO}" 2>/dev/null | sed 's/^/    /' || printf '    (não existe)\n'
+  printf '\n    ---- permissões do arquivo\n'
+  ${SUDO} ls -l "${REGRA_SUDO}" 2>/dev/null | sed 's/^/    /' || true
+  printf '\n    ---- o que o sudo enxerga para a conta\n'
+  "${SUDO_BIN}" -n -l -U "${USUARIO_DEPLOY}" 2>&1 | sed 's/^/    /' || true
+  printf '\n'
+}
+
+if "${SUDO_BIN}" -n -l -U "${USUARIO_DEPLOY}" "${POS_DEPLOY}" >/dev/null 2>&1; then
+  printf '  ✓ a conta pode rodar %s\n' "${POS_DEPLOY}"
 else
-  erro "A conta não recebeu a autorização esperada. Confira ${REGRA_SUDO}."
+  mostrar_evidencia
+  erro "A conta não recebeu a autorização esperada — evidência acima."
 fi
 
-if grep -qE '\(ALL(\s*:\s*ALL)?\)\s+ALL' <<<"${PERMISSOES}"; then
-  aviso "ATENÇÃO: a conta ainda aparece com sudo IRRESTRITO. Procure outra regra"
-  aviso "em /etc/sudoers.d/ ou um grupo (sudo/admin) que a inclua."
+# Sudo irrestrito viria de outra regra ou de um grupo (sudo/admin). Se
+# aparecer, o ganho da #55 é nenhum: a conta continuaria podendo tudo.
+if "${SUDO_BIN}" -n -l -U "${USUARIO_DEPLOY}" 2>/dev/null | grep -qE '\(ALL(\s*:\s*ALL)?\)\s+ALL'; then
+  aviso "ATENÇÃO: a conta ainda aparece com sudo IRRESTRITO."
+  aviso "Procure outra regra em /etc/sudoers.d/ ou um grupo (sudo/admin) que a inclua."
+  mostrar_evidencia
 else
   printf '  ✓ sem sudo irrestrito\n'
+fi
+
+# O SSH da Action precisa de shell de verdade. O `adduser --system` usa
+# /usr/sbin/nologin quando o --shell não pega, e o sintoma apareceria só lá na
+# frente, como um deploy que conecta e não executa nada.
+SHELL_ATUAL="$(getent passwd "${USUARIO_DEPLOY}" | cut -d: -f7)"
+if [[ "${SHELL_ATUAL}" == */nologin || "${SHELL_ATUAL}" == */false ]]; then
+  aviso "A conta estava com shell ${SHELL_ATUAL}; corrigindo para /bin/bash."
+  ${SUDO} usermod -s /bin/bash "${USUARIO_DEPLOY}"
+  SHELL_ATUAL="/bin/bash"
+fi
+printf '  ✓ shell: %s\n' "${SHELL_ATUAL}"
+
+if id -nG "${USUARIO_DEPLOY}" | grep -qw www-data; then
+  printf '  ✓ no grupo www-data\n'
+else
+  erro "A conta não entrou no grupo www-data — o migrate do deploy falharia."
+fi
+
+if [[ -d "/home/${USUARIO_DEPLOY}/.ssh" ]]; then
+  printf '  ✓ /home/%s/.ssh existe, pronto para receber a chave\n' "${USUARIO_DEPLOY}"
+else
+  erro "Faltou criar /home/${USUARIO_DEPLOY}/.ssh"
 fi
 
 log "Pronto."

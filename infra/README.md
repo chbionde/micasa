@@ -192,17 +192,28 @@ script.
 sudo ./infra/criar-conta-deploy.sh
 ```
 
-**Saída esperada:** termina com
+**Saída esperada:** cinco vistos e o `Pronto`.
 
 ```
-  ✓ autorizada em /usr/local/sbin/micasa-pos-deploy
+==> Conferindo o que a conta de deploy pode fazer com sudo
+  ✓ a conta pode rodar /usr/local/sbin/micasa-pos-deploy
   ✓ sem sudo irrestrito
+  ✓ shell: /bin/bash
+  ✓ no grupo www-data
+  ✓ /home/micasa-deploy/.ssh existe, pronto para receber a chave
+
 ==> Pronto.
 ```
 
-**Se divergir:** se aparecer `A regra saiu inválida. NADA foi instalado`, seu sudo continua
-intacto — o script valida antes de instalar, justamente para não te trancar fora. Me mande a
-saída.
+Rodar de novo é seguro: ele diz `A conta micasa-deploy já existe` e segue conferindo.
+
+**Se divergir:**
+
+- `A regra saiu inválida. NADA foi instalado` — seu sudo continua intacto, porque o script
+  valida antes de instalar. Me mande a saída.
+- `A conta não recebeu a autorização esperada` — o script imprime **a evidência logo acima do
+  erro**: o conteúdo do arquivo de regra, as permissões dele e o que o sudo enxerga para a
+  conta. Copie esse bloco inteiro e me mande. Você não precisa ir olhar nada à mão.
 
 ---
 
