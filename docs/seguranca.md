@@ -14,7 +14,6 @@ sobre o estado do sistema ou tem um comando/teste por trás, ou não entra.
 | ✅ | Confirmado seguro, com o teste ou a medição que prova — ou achado já corrigido |
 | ❌ | Achado em aberto, com severidade |
 | ℹ️ | Observação sem risco direto — desvio de padrão ou informação de contexto |
-| 🤝 | Achado avaliado e **aceito**, com o motivo e o gatilho de reabertura |
 
 Cada achado guarda a **descrição original, no tempo presente em que foi escrita**, e ganha um
 bloco **Situação** embaixo quando é fechado. O histórico de por que a decisão foi tomada vale
@@ -45,12 +44,12 @@ Dito primeiro, porque a ausência é o que costuma virar falsa sensação de cob
 
 ## 2. Achados
 
-13 achados. **9 fechados e 1 aceito** dentro da própria #43; 3 seguem em sub-issues.
+13 achados. **10 fechados** dentro da própria #43; 3 seguem em sub-issues.
 
 - **A1 a A7** — bloco de conta e sessão. Era o único conjunto não observável de fora, e por isso
   o único cuja publicação valia esperar a correção.
 - **A11 e A12** — auditoria no CI e validação em FormRequest.
-- **A13** — avaliado e **aceito**: o conserto custaria mais do que rende. Ver a análise no item.
+- **A13** — corrigido, mas não do jeito que o achado sugeria. Ver a análise no item.
 - **A8, A9 e A10** — em sub-issues, porque qualquer pessoa já os enxerga de fora (CSP e HSTS se
   medem com `curl -D-`) ou porque exigem posição já privilegiada (a chave de deploy).
 
@@ -283,32 +282,35 @@ de padrão, sem risco associado.
 **zero** — é consistência, para a validação morar sempre no mesmo lugar. O único comportamento
 novo é um teto de tamanho em `email` e `token`, que não existia; ganhou teste.
 
-### 🤝 A13 — `switchActive` distingue casa inexistente de casa alheia — ACEITO, não corrigido
+### ✅ A13 — `switchActive` distinguia casa inexistente de casa alheia — CORRIGIDO
 
-Medido: casa que existe mas não é minha responde `"Você não faz parte desta casa."`; id
-inexistente responde `"O valor selecionado para o campo casa é inválido."`. Ambos 422.
+Medido antes da correção: casa que existe mas não é minha respondia `"Você não faz parte desta
+casa."`; id inexistente respondia `"O valor selecionado para o campo casa é inválido."`. Ambos
+422. A diferença permitia a um usuário autenticado descobrir quais ids de casa existem — não o
+nome, não quem mora, não o conteúdo; só o tamanho do sistema.
 
-Permite descobrir quais ids de casa existem. Não vaza nome, membro nem conteúdo — o que se
-aprende é o tamanho do sistema.
+**Situação:** corrigido, mas **não** do jeito que o achado sugeria.
 
-**Situação: aceito conscientemente. Recomendo NÃO corrigir**, revertendo a recomendação
-implícita de quando o achado foi levantado.
+A correção óbvia seria usar `"Você não faz parte desta casa"` nos dois casos. Isso fecharia a
+enumeração **mentindo**: quem tivesse um id de casa velho, de uma casa já apagada, leria que
+não faz parte de algo que não existe, e sairia atrás de quem administra o nada. Trocar mensagem
+verdadeira por falsa para esconder um número é segurança de fachada paga em confusão de usuário
+real.
 
-Uniformizar as mensagens custa mais do que rende. O que se fecha: um usuário **autenticado**
-descobre quais ids de casa existem — não o nome, não quem mora, não o conteúdo. Só o tamanho do
-sistema, que hoje é 3.
+A escolha não era binária. A mensagem única passou a ser:
 
-O que se perde: quem tem um id de casa velho — link antigo, casa apagada, aparelho que ficou
-dias sem sincronizar — passa a ler *"Você não faz parte desta casa"* sobre uma casa que **não
-existe**. A mensagem vira mentira, e manda a pessoa procurar quem administra uma casa que não
-está lá.
+> Não foi possível ativar esta casa. Atualize a página para ver suas casas atuais.
 
-Trocar uma mensagem verdadeira por uma falsa, para esconder de quem já entrou o número de casas
-do sistema, é pagar em confusão de usuário real por um ganho que nenhum atacante consegue usar
-para nada.
+Verdadeira nos dois casos, idêntica nos dois casos, e diz o que fazer — que no caso legítimo
+(cliente com lista de casas velha) é exatamente o certo.
 
-**Gatilho para reabrir:** se um dia existir uma tela ou rota que liste casas por id, ou se o
-número de casas virar informação de negócio. Nenhum dos dois é verdade hoje.
+O texto mora numa constante em `SwitchActiveHousehold::INDISPONIVEL`, usada tanto pela action
+quanto pela mensagem do `exists` no FormRequest. Duas cópias do mesmo texto envelheceriam em
+separado, e a diferença entre elas é justamente o que reabriria o vazamento.
+
+Dois testes em `tests/Feature/Security/VarreduraTest.php`: um compara as respostas **inteiras**
+(status, chaves e mensagens) dos dois casos, e o outro garante que a mensagem não voltou a
+afirmar que a casa existe.
 
 ---
 
