@@ -3,14 +3,12 @@
 namespace App\Providers;
 
 use App\Models\User;
+use App\Rules\SenhaNaoVazada;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
-use Illuminate\Contracts\Validation\UncompromisedVerifier;
-use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Validation\NotPwnedVerifier;
 use Illuminate\Validation\Rules\Password;
 
 class AppServiceProvider extends ServiceProvider
@@ -20,16 +18,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // O verificador de senha vazada nasce com timeout de 30 s (o padrão do
-        // NotPwnedVerifier, que o framework instancia sem argumento). Numa VPS
-        // de 1 GB isso é um cadastro pendurado meio minuto quando a API do Have
-        // I Been Pwned estiver lenta — e o desfecho seria aceitar a senha do
-        // mesmo jeito, porque o verificador FALHA ABERTO. Se vai passar, que
-        // passe rápido.
-        $this->app->singleton(
-            UncompromisedVerifier::class,
-            fn ($app) => new NotPwnedVerifier($app[HttpFactory::class], timeout: 3),
-        );
+        //
     }
 
     /**
@@ -64,13 +53,15 @@ class AppServiceProvider extends ServiceProvider
         Password::defaults(function () {
             $regra = Password::min(10);
 
-            // `uncompromised()` é uma chamada HTTP ao Have I Been Pwned, por
-            // k-anonimato: sai só o prefixo de 5 caracteres do SHA-1, nunca a
-            // senha. Fica desligada em teste porque o verificador falha aberto
-            // — a suíte passaria a aprovar qualquer senha no dia em que a rede
-            // do CI oscilasse, e ficaria verde mentindo.
+            // A regra própria entra no lugar do `uncompromised()` do Laravel,
+            // que falha ABERTO — rede indisponível fazia a senha passar sem
+            // verificação e sem aviso. Ver App\Rules\SenhaNaoVazada.
+            //
+            // Desligada durante a suíte para os testes não dependerem da
+            // internet; o caminho de produção é exercitado ligando a chave e
+            // falsificando o HTTP, inclusive no cenário de API fora do ar.
             return config('auth.checar_senha_vazada') === true
-                ? $regra->uncompromised()
+                ? $regra->rules([new SenhaNaoVazada])
                 : $regra;
         });
     }

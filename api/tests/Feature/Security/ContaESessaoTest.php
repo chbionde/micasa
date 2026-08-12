@@ -15,9 +15,11 @@
 use App\Enums\HouseholdRole;
 use App\Models\Household;
 use App\Models\User;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Testing\TestResponse;
 
 function usuarioComCasa(string $senha = 'senha-atual-correta', ?string $email = null): User
 {
@@ -196,7 +198,17 @@ it('recusa senha curta na troca e na redefinição', function () {
  * a partir do sexto caractere, seguidos de `:` e da contagem de vazamentos.
  * Sem falsificar no formato certo, o teste passaria por acidente.
  */
-it('recusa senha encontrada em vazamento quando a verificação está ligada', function () {
+function cadastrarComSenha(string $senha, string $email): TestResponse
+{
+    return test()->postJson('/register', [
+        'name' => 'Sonda',
+        'email' => $email,
+        'password' => $senha,
+        'password_confirmation' => $senha,
+    ]);
+}
+
+it('recusa senha encontrada em vazamento', function () {
     config()->set('auth.checar_senha_vazada', true);
 
     $hash = strtoupper(sha1('senha-vazada-de-teste'));
@@ -205,12 +217,67 @@ it('recusa senha encontrada em vazamento quando a verificação está ligada', f
         'api.pwnedpasswords.com/*' => Http::response(substr($hash, 5).":42\n"),
     ]);
 
-    $this->postJson('/register', [
-        'name' => 'Sonda',
-        'email' => 'vazada@exemplo.test',
-        'password' => 'senha-vazada-de-teste',
-        'password_confirmation' => 'senha-vazada-de-teste',
-    ])->assertInvalid(['password']);
+    cadastrarComSenha('senha-vazada-de-teste', 'vazada@exemplo.test')
+        ->assertInvalid(['password' => 'vazamentos públicos']);
+});
+
+it('ignora as entradas de preenchimento que a API devolve com contagem zero', function () {
+    config()->set('auth.checar_senha_vazada', true);
+
+    // O cabeçalho Add-Padding faz a API misturar entradas falsas, com contagem
+    // 0, para o tamanho da resposta não denunciar nada. Confundir uma delas
+    // com um vazamento real recusaria senha boa.
+    $hash = strtoupper(sha1('cafe-com-pao-na-cozinha'));
+
+    Http::fake([
+        'api.pwnedpasswords.com/*' => Http::response(substr($hash, 5).":0\n"),
+    ]);
+
+    cadastrarComSenha('cafe-com-pao-na-cozinha', 'padding@exemplo.test')->assertNoContent();
+});
+
+/*
+ * O teste que motivou trocar o `uncompromised()` do Laravel por regra própria.
+ *
+ * Com o verificador do framework, este cenário — API fora do ar — resultava em
+ * senha ACEITA, silenciosamente: a exceção virava corpo vazio, e corpo vazio
+ * significa "nenhum vazamento encontrado". A verificação sumia sem avisar.
+ */
+it('recusa a senha quando não consegue falar com o verificador de vazamentos', function () {
+    config()->set('auth.checar_senha_vazada', true);
+
+    Http::fake([
+        'api.pwnedpasswords.com/*' => Http::response('bad gateway', 502),
+    ]);
+
+    cadastrarComSenha('cafe-com-pao-na-cozinha', 'apagada@exemplo.test')
+        ->assertInvalid(['password' => 'Não foi possível conferir sua senha']);
+
+    expect(User::where('email', 'apagada@exemplo.test')->exists())->toBeFalse();
+});
+
+it('recusa a senha quando a conexão com o verificador falha', function () {
+    config()->set('auth.checar_senha_vazada', true);
+
+    Http::fake(fn () => throw new ConnectionException('sem rota para o host'));
+
+    cadastrarComSenha('cafe-com-pao-na-cozinha', 'semrede@exemplo.test')
+        ->assertInvalid(['password' => 'Não foi possível conferir sua senha']);
+});
+
+it('a mesma proteção vale na troca e na redefinição de senha', function () {
+    config()->set('auth.checar_senha_vazada', true);
+    Http::fake(['api.pwnedpasswords.com/*' => Http::response('erro', 500)]);
+
+    $user = usuarioComCasa();
+
+    $this->actingAs($user)
+        ->putJson('/api/user/password', [
+            'current_password' => 'senha-atual-correta',
+            'password' => 'cafe-com-pao-na-cozinha',
+            'password_confirmation' => 'cafe-com-pao-na-cozinha',
+        ])
+        ->assertInvalid(['password' => 'Não foi possível conferir sua senha']);
 });
 
 it('aceita senha longa e ausente dos vazamentos', function () {
@@ -220,12 +287,7 @@ it('aceita senha longa e ausente dos vazamentos', function () {
         'api.pwnedpasswords.com/*' => Http::response("0000000000000000000000000000000000:1\n"),
     ]);
 
-    $this->postJson('/register', [
-        'name' => 'Sonda',
-        'email' => 'boa@exemplo.test',
-        'password' => 'cafe-com-pao-na-cozinha',
-        'password_confirmation' => 'cafe-com-pao-na-cozinha',
-    ])->assertNoContent();
+    cadastrarComSenha('cafe-com-pao-na-cozinha', 'boa@exemplo.test')->assertNoContent();
 });
 
 // ---------------------------------------------------- A4 e A6: rate limit

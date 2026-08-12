@@ -173,7 +173,9 @@ Regra de composição produz `Senha@123`: longa o suficiente para o formulário 
 suficiente para estar em qualquer dicionário de ataque. O NIST 800-63B desaconselha composição
 obrigatória desde 2017, e recomenda exatamente o par usado aqui.
 
-E uma armadilha que só aparece lendo o código do framework:
+### Falha aberta e falha fechada — a lição mais cara deste documento
+
+Uma armadilha que só aparece lendo o código do framework:
 
 ```php
 // Illuminate\Validation\NotPwnedVerifier::search()
@@ -184,13 +186,44 @@ $body = (isset($response) && $response->successful()) ? $response->body() : '';
 // corpo vazio → nenhum vazamento encontrado → a senha PASSA
 ```
 
-O verificador **falha aberto**, e nasce com timeout de 30 segundos. Numa VPS de 1 GB, isso é
-meio minuto de cadastro travado para, no fim, aceitar a senha do mesmo jeito. O timeout foi
-rebindado para 3 segundos: se vai passar, que passe rápido.
+O `uncompromised()` do Laravel **falha aberto**: quando não consegue perguntar, ele responde
+"não achei vazamento". Verificação de segurança que some sozinha e deixa o log como único
+vestígio.
 
-**A lição:** antes de confiar numa verificação de segurança, descubra o que ela faz **quando
-falha**. "Falha aberto" e "falha fechado" são decisões de projeto, e quase nunca estão
-documentadas na primeira página.
+**E aqui houve um erro de raciocínio que vale mais que o acerto.** A primeira versão desta
+correção manteve o `uncompromised()` e apenas encurtou o timeout de 30 s para 3 s, com a
+justificativa de que, numa VPS de 1 GB, meio minuto de cadastro travado terminaria aceitando a
+senha do mesmo jeito — *"se vai passar, que passe rápido"*.
+
+A frase soa razoável e está errada. Ela só vale para as requisições que **iriam falhar de
+qualquer forma**. Para as que responderiam devagar — em 8 segundos, digamos — o timeout curto
+converte uma verificação que **funcionaria** numa aprovação silenciosa. Ou seja: era trocar
+segurança por desempenho, com uma justificativa que escondia a troca inclusive de quem a
+escreveu. O dev leu, não engoliu, e perguntou.
+
+O conserto certo não é o tempo, é o **modo de falha**. A regra própria
+(`App\Rules\SenhaNaoVazada`) falha fechado: verificador inalcançável **recusa** a senha, com
+mensagem própria dizendo que o problema é a verificação, não a senha.
+
+Repare no efeito colateral elegante: **com falha fechada, o timeout deixa de ser questão de
+segurança.** Um timeout curto passa a significar "tente de novo", não "entrou sem conferir". As
+duas preocupações se separam, e aí dá para escolher o tempo pensando só em usabilidade — 5 s,
+com duas tentativas, contra uma API medida em 0,2–0,3 s.
+
+O custo existe e está escrito na classe: com o Have I Been Pwned fora do ar, ninguém cadastra
+nem troca senha até voltar. Isso é uma escolha, não um descuido — e é a escolha que "segurança
+em primeiro lugar" implica.
+
+**As lições, e são três:**
+
+1. Antes de confiar numa verificação de segurança, descubra o que ela faz **quando falha**.
+   "Falha aberto" e "falha fechado" são decisões de projeto, quase nunca documentadas na
+   primeira página.
+2. Desconfie da própria justificativa quando ela for elegante demais. *"Se vai passar, que passe
+   rápido"* é uma frase bonita que escondia uma troca não declarada.
+3. Quando alguém questiona uma decisão sua, **meça antes de responder**. A latência real do HIBP
+   (0,2–0,3 s) só entrou na conversa porque foi medida depois da pergunta — e é ela que sustenta
+   a escolha do timeout novo.
 
 ### A4, A5, A6 — os limites que o framework parou de dar
 
@@ -351,7 +384,8 @@ severidade dele, é se ele já está fechado — ou se um estranho já conseguir
 1. Ler o código gera hipótese; só comando e teste geram fato.
 2. Quando seu teste falha, suspeite dele primeiro.
 3. Avalie achados em cadeia. O perigo mora na combinação.
-4. Antes de confiar numa verificação, descubra o que ela faz quando falha.
+4. Antes de confiar numa verificação, descubra o que ela faz quando falha. Falha aberta é
+   verificação que some sozinha.
 5. Rate limit protege contra repetição **da mesma chave**. Desenhe a chave olhando o ataque.
 6. Não exagere severidade — o exagero gasta o crédito do relatório inteiro.
 7. Em React: se dá para calcular, não guarde em estado.

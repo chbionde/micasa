@@ -114,12 +114,26 @@ caracteres do SHA-1, nunca a senha.
 
 **Situação:** Corrigido nesta issue: `Password::defaults()` passou a ser `min(10)` mais `uncompromised()`.
 
-Duas decisões que valem registro. **Comprimento em vez de composição** — exigir maiúscula,
-número e símbolo empurra a pessoa para `Senha@123`, longa o bastante para o formulário e curta
-o bastante para o dicionário de ataque; o NIST 800-63B desaconselha composição obrigatória
-desde 2017. E **o timeout do verificador caiu de 30 s para 3 s**: numa VPS de 1 GB, meio minuto
-de cadastro pendurado terminaria aceitando a senha do mesmo jeito, porque o `NotPwnedVerifier`
-falha aberto.
+**Comprimento em vez de composição** — exigir maiúscula, número e símbolo empurra a pessoa para
+`Senha@123`, longa o bastante para o formulário e curta o bastante para o dicionário de ataque;
+o NIST 800-63B desaconselha composição obrigatória desde 2017.
+
+**O `uncompromised()` do Laravel foi trocado por regra própria** (`App\Rules\SenhaNaoVazada`),
+porque o do framework **falha aberto**: em `NotPwnedVerifier::search()`, exceção de rede vira
+`report($e)` e corpo vazio, e corpo vazio significa "nenhum vazamento encontrado" — a senha
+passa, a verificação some, e o log é o único vestígio.
+
+A regra própria **falha fechado**: verificador inalcançável recusa a senha, com mensagem que
+diz que o problema é a verificação e não a senha. O custo está declarado: com o Have I Been
+Pwned fora do ar, ninguém cadastra nem troca senha até a API voltar. Medido em 12/08/2026, a
+API responde em 0,2–0,3 s; o timeout é 5 s com duas tentativas.
+
+⚠️ **Correção de rota registrada:** a primeira versão desta correção mantinha o
+`uncompromised()` e apenas reduzia o timeout de 30 s para 3 s, com a justificativa de que "se
+vai passar, que passe rápido". A justificativa era falsa. Com falha aberta, encurtar o timeout
+converte *mais* respostas lentas em aprovações silenciosas — era troca de segurança por
+desempenho, exatamente o que o projeto não faz. O dev apontou; o eixo do conserto passou a ser
+o modo de falha, não o tempo.
 
 ⚠️ A política vale para senha nova. **As senhas já existentes continuam como estavam** — se
 alguma das 3 contas de teste usa senha fraca, ela segue fraca até ser trocada.
