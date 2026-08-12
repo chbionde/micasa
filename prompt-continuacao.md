@@ -207,14 +207,15 @@ commit ficou órfão, sem PR, e o dev teve que mergear na `main` à mão. Ele co
 - **Commits em Conventional Commits, sem `Co-Authored-By`.** Multi-linha via `git commit -F -`
   com heredoc. O corpo explica *por quê*.
 - **Documento didático** em `docs/aprendizado/NN-titulo.md` ao fim de toda tarefa multi-comando.
-  **O próximo é o 13.**
+  **O próximo é o 14.**
 - **Modo tutor de React obrigatório** em toda entrega de front.
 - **Segredos: avise ANTES**, na mesma mensagem em que pedir para ele manipular um.
 - Ele **valoriza que você segure o merge** quando a issue não está de fato resolvida.
 
-> 🚫 **PROIBIÇÃO ATIVA, dada em 12/08:** *"Você está proibido de criar qualquer issue nova para
-> infra ou segurança por agora até terminarmos o que está aberto. NÃO VIOLE ESTA REGRA ATÉ EU
-> MANDAR."* Vale até ele liberar. PR não é issue — PRs continuam normais.
+> ✅ **RESTRIÇÃO REVOGADA PARA O CODEX, em 12/08:** o dev esclareceu que a proibição de criar
+> issues de infra ou segurança era exclusiva do Claude Code, que estava criando trabalho
+> desnecessário. O Codex pode criar e modificar issues e PRs quando forem necessários, mantendo
+> uma tarefa por vez e sem criar itens especulativos.
 
 **Sobre o tom:** ele terminou 12/08 cansado de dois dias de infraestrutura com erros repetidos.
 Não seja defensivo nem se rebaixe. Corrija o que for erro seu em uma ou duas frases, recuse
@@ -286,6 +287,7 @@ linhas que o certbot escreveu, e esquecer isso devolve o site em HTTP puro sem e
 
 | Fonte | Conteúdo |
 |---|---|
+| `AGENTS.md` | Entrada operacional nativa do Codex e ponteiros para estas fontes |
 | `prompt-casa-os.md` | Contrato: papéis, DoD, anti-padrões |
 | **GitHub issues** | Decisões operacionais recentes |
 | `docs/seguranca.md` | ⭐ **Novo.** Resultado da varredura #43: 13 achados, o que foi medido e como, e o que a varredura **não** cobriu. Linha de base da próxima |
@@ -294,8 +296,8 @@ linhas que o certbot escreveu, e esquecer isso devolve o site em HTTP puro sem e
 | `docs/fluxo-trabalho.md` | Fluxo GitHub; exceção de `docs:` direto na main |
 | `docs/como-executar-e-testar.md` | ⚠️ **Desatualizado**: diz "Fatia 2 em andamento", não menciona backup nem segurança |
 | `infra/README.md` | Runbook da VPS. Contém o **modelo de passo a passo** que o dev aceita |
-| `docs/aprendizado/01..12` | O **12** cobre a varredura de segurança e é o mais recente |
-| Memória em `~/.claude/projects/-home-carlosbionde-code-micasa/memory/` | 8 memórias |
+| `docs/aprendizado/01..13` | O **13** documenta a migração do Claude Code para o Codex |
+| Memória privada do Claude | Histórico somente; não copiar, pois contém fatos ultrapassados |
 
 ---
 
@@ -322,6 +324,7 @@ linhas que o certbot escreveu, e esquecer isso devolve o site em HTTP puro sem e
 
 | Issue | O que é | Estado real |
 |---|---|---|
+| **#62** | Preparar o Codex para continuar o MiCasa | **Em andamento.** Skills instaladas e documentação preparada; não iniciar outra issue antes do merge |
 | **#53** | CSP ausente | Código no ar em modo relato. **Falta só o dev conferir o console numa janela anônima.** A aplicação está limpa — medido: HTML e CSS de produção sem nenhuma referência externa. A violação que ele viu era extensão do navegador dele |
 | **#54** | HSTS ausente | **Não começada.** Critério de aceite já ajustado: fecha em `max-age=2592000` (30 dias), com a subida para um ano como passo posterior sem dono |
 | **#55** | Chave de deploy com poder de root | **Quase fechada.** Passos 1–6 feitos e verificados; falta o **passo 7** (remover a chave de deploy antiga do `authorized_keys` do `ubuntu`), reescrito no `infra/README.md` sem depender do `nano` |
@@ -332,7 +335,7 @@ linhas que o certbot escreveu, e esquecer isso devolve o site em HTTP puro sem e
 ### Ordem decidida pelo dev
 
 ```
-#53, #54, #55  (sub-issues da varredura)   →   #48 (SMTP)   →   Fatia 2 (#35, #36)
+#62 (onboarding do Codex)   →   #53, #54, #55   →   #48 (SMTP)   →   Fatia 2 (#35, #36)
 ```
 
 Ele decidiu em 12/08 que as três sub-issues vêm **antes** da #48: *"pendências soltas primeiro
@@ -340,13 +343,14 @@ e depois o planejamento já existente, assim evitamos débito técnico futuro"*.
 
 ### Primeira ação
 
-1. Ler `prompt-casa-os.md`
-2. Conferir estado: `git log --oneline -5`, `gh issue list`, suíte verde
-3. **Perguntar ao dev qual das três sub-issues retomar**, porque todas dependem de ação dele:
+1. Ler `AGENTS.md`, `prompt-casa-os.md`, `contexto-do-projeto.md` e este arquivo
+2. Conferir se a issue #62 foi fechada pelo merge e se não há outro PR ativo
+3. Se a #62 ainda estiver aberta, terminar somente ela; não iniciar outra tarefa
+4. Depois do merge, conferir estado: `git log --oneline -5`, `gh issue list`, suíte verde
+5. **Perguntar ao dev qual das três sub-issues retomar**, porque todas dependem de ação dele:
    - #53 depende do console na janela anônima
    - #55 depende do passo 7
    - #54 é a única que dá para começar sozinho — mas exige `aplicar-nginx.sh` na VPS, que é ele
-4. **Não crie issue de infra ou segurança.** Ver a proibição na seção 2
 
 ### O item de produto que ninguém levantou ainda
 
@@ -363,8 +367,6 @@ o momento natural é ao fim da #48.
   distintos e não há filtro de `paths:`
 - Object Lock no B2 — gatilho: existir volume real
 - Rotação da credencial do B2 com `validDurationSeconds`
-- `publicar/` está na raiz do repositório, **não rastreada e não ignorada**. São logs do Actions
-  que o dev colou para leitura. Um `git add -A` a commitaria de novo
 - A promoção da CSP estrita a bloqueante é **uma linha** em
   `infra/nginx/cabecalhos-seguranca.conf`, depois que o console estiver limpo
 
