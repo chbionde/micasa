@@ -61,6 +61,72 @@ describe('ContaPage', () => {
     expect(await screen.findByText('Dados atualizados.')).toBeInTheDocument()
   })
 
+  it('não pede senha para trocar só o nome', async () => {
+    const user = userEvent.setup()
+    apiPatch.mockResolvedValue(USUARIO)
+    renderConta()
+
+    const campoNome = await screen.findByLabelText('Nome')
+    await user.clear(campoNome)
+    await user.type(campoNome, 'Carlos Bionde')
+
+    expect(screen.queryByLabelText('Confirme sua senha')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Salvar dados' }))
+
+    // Sem `current_password` na carga: a senha não viaja quando não é exigida.
+    expect(apiPatch).toHaveBeenCalledWith('/api/user/profile', {
+      name: 'Carlos Bionde',
+      email: 'carlos@exemplo.com.br',
+    })
+  })
+
+  it('pede a senha atual assim que o e-mail muda, e a envia junto', async () => {
+    const user = userEvent.setup()
+    apiPatch.mockResolvedValue(USUARIO)
+    renderConta()
+
+    const campoEmail = await screen.findByLabelText('E-mail')
+    await user.clear(campoEmail)
+    await user.type(campoEmail, 'novo@exemplo.com.br')
+
+    await user.type(screen.getByLabelText('Confirme sua senha'), 'minha-senha')
+    await user.click(screen.getByRole('button', { name: 'Salvar dados' }))
+
+    expect(apiPatch).toHaveBeenCalledWith('/api/user/profile', {
+      name: 'Carlos',
+      email: 'novo@exemplo.com.br',
+      current_password: 'minha-senha',
+    })
+  })
+
+  it('esconde o pedido de senha se o e-mail voltar ao original', async () => {
+    const user = userEvent.setup()
+    renderConta()
+
+    const campoEmail = await screen.findByLabelText('E-mail')
+    await user.type(campoEmail, 'x')
+    expect(screen.getByLabelText('Confirme sua senha')).toBeInTheDocument()
+
+    await user.clear(campoEmail)
+    await user.type(campoEmail, 'carlos@exemplo.com.br')
+    expect(screen.queryByLabelText('Confirme sua senha')).not.toBeInTheDocument()
+  })
+
+  it('mostra o erro quando a senha da troca de e-mail está errada', async () => {
+    const user = userEvent.setup()
+    apiPatch.mockRejectedValue(erro422({ current_password: ['A senha informada está incorreta.'] }))
+    renderConta()
+
+    const campoEmail = await screen.findByLabelText('E-mail')
+    await user.clear(campoEmail)
+    await user.type(campoEmail, 'novo@exemplo.com.br')
+    await user.type(screen.getByLabelText('Confirme sua senha'), 'chute')
+    await user.click(screen.getByRole('button', { name: 'Salvar dados' }))
+
+    expect(await screen.findByText('A senha informada está incorreta.')).toBeInTheDocument()
+  })
+
   it('mostra erro de e-mail já cadastrado', async () => {
     const user = userEvent.setup()
     apiPatch.mockRejectedValue(erro422({ email: ['Este e-mail já está em uso.'] }))

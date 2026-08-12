@@ -2,7 +2,12 @@ import { api } from '../../lib/api'
 import type { Envelope } from '../../lib/api'
 import type { User } from '../auth/types'
 
-export async function atualizarPerfil(dados: { name: string; email: string }): Promise<User> {
+export async function atualizarPerfil(dados: {
+  name: string
+  email: string
+  /** Só quando o e-mail muda — ver ContaPage e docs/seguranca.md (#43, A1). */
+  current_password?: string
+}): Promise<User> {
   const { data } = await api.patch<Envelope<User>>('/api/user/profile', dados)
   return data.data
 }

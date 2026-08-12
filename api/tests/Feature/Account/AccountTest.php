@@ -20,10 +20,16 @@ function casaDe(User $admin, ?User $outro = null): Household
 // ------------------------------------------------------------ perfil
 
 it('atualiza nome e e-mail', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->create(['password' => Hash::make('senha-da-pessoa')]);
 
+    // A senha atual entrou como exigência na varredura #43: o e-mail é a
+    // chave de recuperação da conta. Ver tests/Feature/Security.
     $this->actingAs($user)
-        ->patchJson('/api/user/profile', ['name' => 'Carlos B.', 'email' => 'novo@exemplo.com.br'])
+        ->patchJson('/api/user/profile', [
+            'name' => 'Carlos B.',
+            'email' => 'novo@exemplo.com.br',
+            'current_password' => 'senha-da-pessoa',
+        ])
         ->assertOk()
         ->assertJsonPath('data.email', 'novo@exemplo.com.br');
 
@@ -40,10 +46,15 @@ it('permite salvar mantendo o próprio e-mail', function () {
 
 it('recusa e-mail já usado por outra pessoa', function () {
     User::factory()->create(['email' => 'ocupado@exemplo.com.br']);
-    $user = User::factory()->create();
+    $user = User::factory()->create(['password' => Hash::make('senha-da-pessoa')]);
 
+    // Com a senha correta, o único motivo de recusa é a unicidade.
     $this->actingAs($user)
-        ->patchJson('/api/user/profile', ['name' => 'Carlos', 'email' => 'ocupado@exemplo.com.br'])
+        ->patchJson('/api/user/profile', [
+            'name' => 'Carlos',
+            'email' => 'ocupado@exemplo.com.br',
+            'current_password' => 'senha-da-pessoa',
+        ])
         ->assertInvalid(['email']);
 });
 

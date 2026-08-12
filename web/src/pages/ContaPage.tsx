@@ -45,9 +45,21 @@ function SecaoPerfil({
 }) {
   const [name, setName] = useState(nomeInicial)
   const [email, setEmail] = useState(emailInicial)
+  const [senhaAtual, setSenhaAtual] = useState('')
   const [erros, setErros] = useState<ValidationErrors | null>(null)
   const [salvo, setSalvo] = useState(false)
   const [enviando, setEnviando] = useState(false)
+
+  // VALOR DERIVADO, não estado. `emailMudou` é uma pergunta que se responde
+  // olhando para `email` e `emailInicial`, e ambos já estão aqui — então ele
+  // se calcula a cada render, de graça.
+  //
+  // A alternativa comum seria um `useState(false)` mais um `useEffect` que o
+  // sincroniza a cada tecla. Isso custa um render extra e cria uma janela em
+  // que `email` já mudou e `emailMudou` ainda diz que não: dois fatos sobre a
+  // mesma coisa, com chance de discordarem. A regra prática: se dá para
+  // calcular a partir do que você já tem, não guarde.
+  const emailMudou = email.trim().toLowerCase() !== emailInicial.toLowerCase()
 
   async function submeter(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -56,8 +68,15 @@ function SecaoPerfil({
     setSalvo(false)
 
     try {
-      await atualizarPerfil({ name, email })
+      // A senha só viaja quando é exigida. Mandá-la sempre significaria a
+      // senha da pessoa cruzando a rede a cada troca de nome, sem motivo.
+      await atualizarPerfil({
+        name,
+        email,
+        ...(emailMudou ? { current_password: senhaAtual } : {}),
+      })
       await aoSalvar()
+      setSenhaAtual('')
       setSalvo(true)
     } catch (erro) {
       setErros(getValidationErrors(erro) ?? { email: ['Não foi possível salvar.'] })
@@ -79,6 +98,32 @@ function SecaoPerfil({
         onChange={setEmail}
         erro={erros?.email?.[0]}
       />
+
+      {/*
+        O campo aparece só quando é preciso. `emailMudou && <campo/>` é
+        renderização condicional pura: quando é falso, o React não põe nada no
+        DOM — o campo não fica escondido por CSS, ele não existe. Quem navega
+        por teclado ou leitor de tela não tropeça num campo invisível.
+
+        O texto explica POR QUE a senha está sendo pedida. Pedir senha sem
+        motivo declarado é o que ensina as pessoas a digitá-la em qualquer
+        lugar que peça.
+      */}
+      {emailMudou && (
+        <CampoTexto
+          id="conta-senha-atual"
+          // "Senha atual" seria ambíguo: a seção de trocar senha, logo abaixo,
+          // já usa esse rótulo. Dois campos com o mesmo nome acessível deixam
+          // quem usa leitor de tela sem saber qual é qual.
+          label="Confirme sua senha"
+          type="password"
+          value={senhaAtual}
+          onChange={setSenhaAtual}
+          erro={erros?.current_password?.[0]}
+          autoComplete="current-password"
+          ajuda="Trocar o e-mail muda para onde vai o link de recuperação da conta, por isso pedimos sua senha."
+        />
+      )}
 
       {salvo && <p className="text-sm text-emerald-700">Dados atualizados.</p>}
 
