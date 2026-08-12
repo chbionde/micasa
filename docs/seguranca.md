@@ -14,6 +14,7 @@ sobre o estado do sistema ou tem um comando/teste por trás, ou não entra.
 | ✅ | Confirmado seguro, com o teste ou a medição que prova — ou achado já corrigido |
 | ❌ | Achado em aberto, com severidade |
 | ℹ️ | Observação sem risco direto — desvio de padrão ou informação de contexto |
+| 🤝 | Achado avaliado e **aceito**, com o motivo e o gatilho de reabertura |
 
 Cada achado guarda a **descrição original, no tempo presente em que foi escrita**, e ganha um
 bloco **Situação** embaixo quando é fechado. O histórico de por que a decisão foi tomada vale
@@ -44,9 +45,14 @@ Dito primeiro, porque a ausência é o que costuma virar falsa sensação de cob
 
 ## 2. Achados
 
-13 achados. **7 fechados na própria #43** — o bloco de conta e sessão, A1 a A7, que era o
-único não observável de fora e por isso o único cuja publicação valia esperar. Os 6 restantes
-seguem em aberto: A8, A9 e A10 em sub-issues, e A11 a A13 numa segunda PR desta issue.
+13 achados. **9 fechados e 1 aceito** dentro da própria #43; 3 seguem em sub-issues.
+
+- **A1 a A7** — bloco de conta e sessão. Era o único conjunto não observável de fora, e por isso
+  o único cuja publicação valia esperar a correção.
+- **A11 e A12** — auditoria no CI e validação em FormRequest.
+- **A13** — avaliado e **aceito**: o conserto custaria mais do que rende. Ver a análise no item.
+- **A8, A9 e A10** — em sub-issues, porque qualquer pessoa já os enxerga de fora (CSP e HSTS se
+  medem com `curl -D-`) ou porque exigem posição já privilegiada (a chave de deploy).
 
 ### ✅ A1 — Trocar o e-mail não exigia a senha atual · **Alta** — CORRIGIDO
 
@@ -245,7 +251,7 @@ Portanto: quem obtiver o secret `SSH_PRIVATE_KEY` do GitHub tem root na produç�
 para "controle da aplicação". Não elimina o segundo — a chave abre um shell e o `deploy.sh` faz
 `git pull`. É mitigação real, não conserto.
 
-### ❌ A11 — `composer audit` e `npm audit` não rodam no CI · **Baixa**
+### ✅ A11 — `composer audit` e `npm audit` não rodavam no CI · **Baixa** — CORRIGIDO
 
 Estado hoje, medido em 12/08/2026: **0 vulnerabilidades** dos dois lados. O risco não é o
 presente, é o silêncio no dia em que aparecer um aviso.
@@ -253,19 +259,56 @@ presente, é o silêncio no dia em que aparecer um aviso.
 O bloqueio registrado na issue #43 — filtro de `paths:` e dois jobs chamados `quality` —
 **deixou de existir** com o merge da #49. O item está liberado.
 
-### ℹ️ A12 — Validação inline no `PasswordResetController`
+**Situação:** corrigido. Um passo de auditoria em cada workflow.
+
+**Troca consciente, declarada:** o `composer audit` **não tem corte por severidade** — reprova
+com qualquer aviso. Um aviso publicado de madrugada deixa o CI vermelho numa PR que não tem
+nada a ver com dependência. Aceito de propósito: num projeto de 5 h por semana, alerta que não
+bloqueia é alerta que se ignora. Já o `npm audit` roda com corte em `high`, porque a árvore do
+front é ordens de grandeza maior e quase todo aviso moderado dela cai em pacote de build que
+nunca vê entrada de usuário — sem o corte, o CI ficaria vermelho por ruído, que é o mesmo
+fracasso pelo outro lado.
+
+Isto **não substitui o Dependabot**, que já estava ligado. Ele avisa depois que a dependência
+entrou; o CI pega antes, no momento em que ela entraria. Mesma base de avisos, momentos
+diferentes.
+
+### ✅ A12 — Validação inline no `PasswordResetController` — CORRIGIDO
 
 `sendLink` e `reset` usam `$request->validate([...])` direto. O checklist do Revisor de Código
 no `prompt-casa-os.md` pede validação em FormRequest, e todo o resto do projeto obedece. Desvio
 de padrão, sem risco associado.
 
-### ℹ️ A13 — `switchActive` distingue casa inexistente de casa alheia
+**Situação:** corrigido, com `SendResetLinkRequest` e `ResetPasswordRequest`. Valor de segurança:
+**zero** — é consistência, para a validação morar sempre no mesmo lugar. O único comportamento
+novo é um teto de tamanho em `email` e `token`, que não existia; ganhou teste.
+
+### 🤝 A13 — `switchActive` distingue casa inexistente de casa alheia — ACEITO, não corrigido
 
 Medido: casa que existe mas não é minha responde `"Você não faz parte desta casa."`; id
 inexistente responde `"O valor selecionado para o campo casa é inválido."`. Ambos 422.
 
 Permite descobrir quais ids de casa existem. Não vaza nome, membro nem conteúdo — o que se
 aprende é o tamanho do sistema.
+
+**Situação: aceito conscientemente. Recomendo NÃO corrigir**, revertendo a recomendação
+implícita de quando o achado foi levantado.
+
+Uniformizar as mensagens custa mais do que rende. O que se fecha: um usuário **autenticado**
+descobre quais ids de casa existem — não o nome, não quem mora, não o conteúdo. Só o tamanho do
+sistema, que hoje é 3.
+
+O que se perde: quem tem um id de casa velho — link antigo, casa apagada, aparelho que ficou
+dias sem sincronizar — passa a ler *"Você não faz parte desta casa"* sobre uma casa que **não
+existe**. A mensagem vira mentira, e manda a pessoa procurar quem administra uma casa que não
+está lá.
+
+Trocar uma mensagem verdadeira por uma falsa, para esconder de quem já entrou o número de casas
+do sistema, é pagar em confusão de usuário real por um ganho que nenhum atacante consegue usar
+para nada.
+
+**Gatilho para reabrir:** se um dia existir uma tela ou rota que liste casas por id, ou se o
+número de casas virar informação de negócio. Nenhum dos dois é verdade hoje.
 
 ---
 

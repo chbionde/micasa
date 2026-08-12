@@ -93,3 +93,22 @@ it('recusa nova senha sem confirmação correta', function () {
         return true;
     });
 });
+
+// A validação saiu do controller para FormRequest na varredura #43. Junto
+// veio um teto de tamanho que não existia: sem ele, o corpo da requisição é
+// entrada sem limite.
+
+it('recusa e-mail absurdamente grande no pedido de link', function () {
+    $this->postJson('/forgot-password', [
+        'email' => str_repeat('a', 300).'@exemplo.com.br',
+    ])->assertInvalid(['email']);
+});
+
+it('recusa token absurdamente grande na redefinição', function () {
+    $this->postJson('/reset-password', [
+        'token' => str_repeat('a', 100_000),
+        'email' => 'alguem@exemplo.com.br',
+        'password' => 'senha-nova-bem-longa',
+        'password_confirmation' => 'senha-nova-bem-longa',
+    ])->assertInvalid(['token']);
+});

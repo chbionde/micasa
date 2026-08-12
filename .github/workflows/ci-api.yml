@@ -36,6 +36,20 @@ jobs:
       - name: Instalar dependências
         run: composer install --prefer-dist --no-progress --no-interaction
 
+      # Reprova a PR que trouxer dependência com aviso de segurança publicado.
+      #
+      # Isto NÃO substitui o Dependabot, que já está ligado — ele avisa depois
+      # que a dependência entrou. Este passo pega antes, no momento em que ela
+      # entraria. Os dois olham a mesma base de avisos, em momentos diferentes.
+      #
+      # ⚠️ TROCA CONSCIENTE: o `composer audit` não tem corte por severidade;
+      # reprova com QUALQUER aviso. Isso significa que um aviso publicado de
+      # madrugada deixa o CI vermelho numa PR que não tem nada a ver com
+      # dependência. É atrito real, aceito de propósito — num projeto de 5 h
+      # por semana, o alerta que não bloqueia é o alerta que se ignora.
+      - name: Auditoria de dependências
+        run: composer audit --no-interaction
+
       - name: Preparar ambiente
         run: |
           cp .env.example .env

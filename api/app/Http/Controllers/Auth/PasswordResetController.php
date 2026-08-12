@@ -3,15 +3,15 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\ResetPasswordRequest;
+use App\Http\Requests\Auth\SendResetLinkRequest;
 use App\Models\User;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rules\Password as PasswordRule;
 use Illuminate\Validation\ValidationException;
 
 class PasswordResetController extends Controller
@@ -22,10 +22,8 @@ class PasswordResetController extends Controller
      * A resposta é sempre a mesma, exista o e-mail ou não: dizer "não
      * encontrado" transformaria esta rota num verificador de quem tem conta.
      */
-    public function sendLink(Request $request): JsonResponse
+    public function sendLink(SendResetLinkRequest $request): JsonResponse
     {
-        $request->validate(['email' => ['required', 'email']]);
-
         Password::sendResetLink($request->only('email'));
 
         return response()->json([
@@ -36,14 +34,8 @@ class PasswordResetController extends Controller
     /**
      * @throws ValidationException
      */
-    public function reset(Request $request): Response
+    public function reset(ResetPasswordRequest $request): Response
     {
-        $request->validate([
-            'token' => ['required', 'string'],
-            'email' => ['required', 'email'],
-            'password' => ['required', 'confirmed', PasswordRule::defaults()],
-        ]);
-
         $status = Password::reset(
             $request->only('email', 'password', 'password_confirmation', 'token'),
             function (User $user, string $password) {
