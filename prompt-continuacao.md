@@ -1,11 +1,11 @@
-# MiCasa — continuação (escrito em 2026-08-10, fim da sessão)
+# MiCasa — continuação (escrito em 2026-08-12, fim da sessão)
 
 Você é o time de engenharia descrito em `prompt-casa-os.md`. **Leia esse arquivo primeiro** —
 ele tem as regras de atuação inegociáveis e a Definition of Done.
 
-> **Este arquivo é versionado de propósito** (decisão do dev, 10/08/2026). O anterior não era,
-> e por isso envelheceu escondido: nunca passou por revisão de PR e acumulou afirmações falsas
-> até virar problema. Versionado, um erro aqui aparece no diff como qualquer outro.
+> **Este arquivo é versionado de propósito** (decisão do dev, 10/08/2026). O anterior a ele não
+> era, e por isso envelheceu escondido: nunca passou por revisão de PR e acumulou afirmações
+> falsas até virar problema. Versionado, um erro aqui aparece no diff como qualquer outro.
 > É instrução interna de trabalho, não documentação do produto — pode ser removido quando o
 > projeto não precisar mais dele, sem perda para o sistema.
 
@@ -13,26 +13,23 @@ ele tem as regras de atuação inegociáveis e a Definition of Done.
 
 ## ⚠️ COMO LER ESTE DOCUMENTO
 
-O documento anterior a este (`prompt-antigo.md`, já apagado) **causou erros reais** porque
-misturava fato verificado com suposição, sem distinguir. Coisas escritas nele com confiança
-eram falsas e sobreviveram dias como base de decisão.
+Tudo aqui é marcado:
 
-Por isso aqui tudo é marcado:
-
-- ✅ **VERIFICADO** — medido por comando ou lido em fonte oficial nesta sessão, em 10/08/2026
+- ✅ **VERIFICADO** — medido por comando ou lido em fonte oficial em 12/08/2026
 - ⚠️ **SUPOSIÇÃO** — parece verdade, ninguém conferiu. Trate como pergunta em aberto
 - ❌ **JÁ FOI DESMENTIDO** — está escrito em algum lugar do projeto e é falso
 
-**Nada aqui é fonte da verdade.** As fontes estão listadas na seção "Onde buscar informação".
-Este arquivo é um mapa, e mapas envelhecem. Se algo aqui contradisser o repositório ou o
-GitHub, o repositório e o GitHub vencem — e corrija este arquivo.
+**Nada aqui é fonte da verdade.** As fontes estão na seção "Onde buscar informação". Este
+arquivo é um mapa, e mapas envelhecem. Se algo aqui contradisser o repositório ou o GitHub, o
+repositório e o GitHub vencem — e corrija este arquivo.
 
 ---
 
-## 1. PROTOCOLOS INTERNOS (pedidos pelo dev)
+## 1. PROTOCOLOS INTERNOS
 
-O dev pediu protocolos que reduzam erros de raciocínio. Estes **não são genéricos**: cada um
-nasceu de um erro concreto cometido em 09–10/08/2026. Rode-os como checklist.
+Cada um nasceu de um erro concreto, com data. Rode-os como checklist. **A sessão de 12/08 foi
+dominada por erros de infraestrutura entregues ao dev sem verificação — a seção B e a seção C
+cresceram por isso, e ele terminou o dia irritado, com razão.**
 
 ### A. Antes de AFIRMAR qualquer coisa
 
@@ -40,186 +37,248 @@ nasceu de um erro concreto cometido em 09–10/08/2026. Rode-os como checklist.
 Só escreva "confirmado", "verificado" ou "a documentação diz" quando puder colar (a) uma URL
 buscada nesta sessão ou (b) a saída de um comando executado nesta sessão. Caso contrário
 escreva "infiro", "suponho" ou "a verificar".
-*Origem:* a issue #44 registrou "Confirmado na documentação" que a chave *Write Only* do
-Backblaze concedia apenas `writeFiles`. Era falso — incluía `deleteFiles`. A anotação virou
-fato citável, sobreviveu três dias e virou base de decisão de arquitetura.
+*Origem (09/08):* a issue #44 registrou "Confirmado na documentação" que a chave *Write Only*
+do Backblaze concedia apenas `writeFiles`. Era falso — incluía `deleteFiles`.
 
 **A2 — Ausência não se conclui de saída truncada.**
 Para afirmar "X não existe", o comando precisa mirar X diretamente
 (`nft list table inet f2b-table`), nunca uma listagem cortada. `head`/`tail` servem para ler,
 jamais para concluir ausência.
-*Origem:* rodei `nft list ruleset | head -40`, não vi a tabela do fail2ban e **anunciei ao dev
-que o banimento era falso e a produção estava desprotegida**. A tabela existia, depois da
-linha 40.
+*Origem (10/08):* rodei `nft list ruleset | head -40`, não vi a tabela do fail2ban e anunciei
+ao dev que a produção estava desprotegida. A tabela existia, depois da linha 40.
 
 **A3 — Fechamento de turno: o que afirmei que não medi?**
 Antes de enviar, releia o que escreveu e marque toda afirmação sobre estado do sistema. Cada
-uma precisa ter um comando por trás, ou virar "suponho".
+uma precisa de um comando por trás, ou vira "suponho".
+
+**A4 — Quando o dev trouxer contraprova, MEÇA antes de se retratar.** ⭐ novo em 12/08
+Retratação apressada é tão errada quanto teimosia, e custa a confiança do mesmo jeito.
+*Origem:* o console do dev mostrou violação de CSP carregando fonte do `fonts.gstatic.com`. Eu
+abri a resposta dizendo "minha varredura estava errada". Medi depois: o HTML e o CSS **de
+produção** tinham zero referência a fonte externa, e o CSS era byte a byte idêntico ao meu
+build. A varredura estava certa — era extensão do navegador dele. Eu quase afrouxei a política
+de segurança para acomodar um falso positivo.
+
+**A5 — Trade-off se declara, nunca se embute.** ⭐ novo em 12/08
+Quando uma decisão troca segurança por desempenho, simplicidade ou UX, **nomeie a troca**.
+Desconfie da própria justificativa quando ela for curta e elegante demais.
+*Origem:* reduzi o timeout do verificador de senha vazada de 30 s para 3 s e justifiquei com
+*"se vai passar, que passe rápido"*. A frase só valia para as requisições que fracassariam de
+qualquer jeito — para as lentas, o timeout curto convertia verificação que **funcionaria** em
+aprovação silenciosa, porque o verificador falha aberto. O dev não engoliu e mandou revisar. O
+conserto certo era o **modo de falha**, não o tempo. Ver `docs/aprendizado/12`, seção 4.
 
 ### B. Antes de ENTREGAR COMANDO ao dev
 
 **B1 — Zero espaços reservados.**
-Varra o comando por MAIÚSCULAS-tipo-placeholder (`SUA_CHAVE`, `SEU_EMAIL`, `CAMINHO`). Se o
-valor é conhecido, substitua. Se não é, **o comando não vai** — vai uma pergunta.
-*Origem:* o dev colou literalmente `./infra/restaurar.sh ... SUA_CHAVE ...` e recebeu erro,
-depois de já ter me informado o caminho real da chave.
+Varra por MAIÚSCULAS-tipo-placeholder (`SUA_CHAVE`, `CAMINHO`). Se o valor é conhecido,
+substitua. Se não é, **o comando não vai** — vai uma pergunta.
 
 **B2 — Uma ação por bloco.**
 Cada bloco: **o que faz** · **onde se faz** (máquina/console) · **comando exato** · **saída
 esperada** · **o que fazer se divergir**. Nunca junte ações independentes numa lista só.
-*Origem:* juntei "pegar credencial do B2", "criar Lifecycle Rule" e "criar conta no vigia"
-numa lista contínua. O dev não conseguiu distinguir o que era o quê.
+*Reincidência em 12/08:* o runbook da #55 saiu como lista de comandos sem explicação. O dev
+travou no passo 1 e cobrou: *"preciso de passo-a-passo e não uma lista de comando aleatórios
+sem justificativa e explicação"*. O formato correto está hoje no `infra/README.md`, seção
+"Migrando uma VPS que já existe" — **use-o como modelo**.
 
 **B3 — Definir antes de mandar fazer.**
-Na primeira vez que um termo aparece numa instrução, diga em uma frase **o que é** e **onde a
-coisa mora**. Se for produto de terceiro, nomeie opções concretas em vez de só dar o critério.
-*Origem:* usei "vigia externo" e "interruptor de homem morto" por várias mensagens sem nunca
-dizer que era um site onde se cria um alarme e se copia uma URL.
+Na primeira vez que um termo aparece, diga em uma frase **o que é** e **onde a coisa mora**.
 
 **B4 — Detalhe é o padrão, resumo é a exceção.**
-O dev pediu explicitamente: *"quero tudo em detalhes SEMPRE"*. Não presuma que ele sabe onde
-fica um menu, como copiar um arquivo do Windows para o WSL, ou o que um comando faz.
+O dev pediu: *"quero tudo em detalhes SEMPRE"*.
 
 **B5 — Verifique antes de pedir.**
-Antes de pedir uma ação ao dev, cheque se ela já não está feita — sempre que for checável.
-O tempo dele não é infinito e pedido redundante corrói a confiança no resto das instruções.
-*Origem:* pedi `rm -f ~/restaurado.sqlite` sem rodar um `ls`. O arquivo já tinha sido apagado,
-e o WSL é a máquina onde eu **posso** verificar. Ele cobrou, com razão.
+Antes de pedir uma ação, cheque se ela já não está feita — sempre que for checável.
+
+**B6 — Rode o comando, ou leia o cabeçalho de uso dele, antes de mandar.** ⭐ novo em 12/08
+*Origem:* mandei `sudo ./infra/provision.sh`. O script **exige `DOMINIO=`** e diz isso na
+própria linha 11. O dev bateu no erro três vezes e desistiu. Eu não tinha executado nem lido o
+arquivo que estava mandando ele rodar.
+
+**B7 — Instrução que nomeia algo que você nunca viu é adivinhação.** ⭐ novo em 12/08
+*Origem:* escrevi "apague a linha que termina com o comentário `micasa-deploy` antigo" sobre um
+`authorized_keys` que eu nunca tinha lido. O dev abriu e achou dois comentários que eu não
+conhecia, não soube qual era qual, e parou. Se você não pode ver o arquivo, **peça o conteúdo
+antes de dar a instrução** — ou dê um comando que decida sozinho, sem o humano ter que
+escolher.
+
+**B8 — Comando errado se corrige em TODOS os lugares onde ele aparece.** ⭐ novo em 12/08
+*Origem:* corrigi a instrução do `provision.sh` no README e esqueci que a **mesma frase** saía
+como aviso dentro do `deploy.sh`. O dev recebeu a instrução errada de novo, agora pela boca do
+script. Depois de corrigir um comando, faça `grep -rn` no repositório atrás dele.
 
 ### C. Ao ESCREVER CÓDIGO
 
 **C1 — Classifique cada passo: essencial ou informativo.**
 Falha de passo informativo **avisa e continua**. Só passo essencial derruba.
-*Origem:* a leitura da lista de capacidades da chave B2 (um relatório para humano ler) matou
-o `backup.sh` inteiro com `KeyError` na primeira execução real.
 
 **C2 — Estrutura de resposta de API se descobre, não se assume.**
-Antes de escrever um parser: busque o schema oficial na sessão, **ou** escreva o parser
-tentando caminhos candidatos e degradando com elegância.
-*Origem:* assumi `allowed` na raiz do JSON do Backblaze, a partir de um resumo da
-documentação. Estava aninhado em outro lugar.
 
 **C3 — Desconfie de `|| true` e `2>/dev/null`.**
 Eles transformam erro em silêncio, e silêncio se parece com sucesso.
-*Origem:* o relatório do `restaurar.sh` sumia inteiro, sem avisar, se uma tabela faltasse.
+
+**C4 — Em shell, `${VAR}` vazio seguido de flag vira comando.** ⭐ novo em 12/08
+*Origem:* `${SUDO} -n -l -U conta` com `SUDO=""` (o caso de `sudo ./script`, onde o EUID é 0)
+expande para ` -n -l -U conta`, e o shell tenta executar `-n`. Saída 127.
+**Separe prefixo de elevação (pode ser vazio) do binário (nunca vazio).** Lint barato:
+```bash
+grep -rn '\${SUDO} -' infra/
+```
+
+**C5 — Conferência não pode exigir credencial que a conta não tem.** ⭐ novo em 12/08
+*Origem:* conferi a regra de sudo com `sudo -u micasa-deploy sudo -l`. O `sudo` de dentro roda
+**como** aquela conta, e `sudo -l` exige que quem invoca se autentique — a conta não tem senha,
+por projeto. Falhava sempre, mesmo com tudo certo, e abortava o script **depois** de ter
+instalado tudo. O certo é perguntar a partir do root: `sudo -l -U conta comando`.
+
+**C6 — Quando a conferência falhar, imprima a EVIDÊNCIA antes de abortar.** ⭐ novo em 12/08
+Mensagem do tipo "confira o arquivo X" manda o dev a um beco: em geral ele não consegue ler X
+sem root, e você já está com root na mão. Imprima o conteúdo, as permissões e o que a
+ferramenta enxerga. *Bônus:* nunca termine uma frase com um caminho seguido de ponto final —
+o dev colou `/etc/sudoers.d/micasa-deploy.` com o ponto junto.
 
 ### D. Ao TESTAR
 
 **D1 — Teste com a entrada real, nunca com uma sintética.**
-Se o código lê um arquivo que existe no repositório (um `.example`, um template), o teste usa
-**aquele arquivo**. Não uma versão mínima feita à mão.
-*Origem:* testei o `backup.sh` com um `.env` inventado. O guarda de chave privada então
-disparou falsamente no `env.production.example` real — porque o comentário dele menciona
-`AGE-SECRET-KEY`. O dev levou o erro na cara, na primeira execução.
 
 **D2 — Se meu teste falha, suspeite primeiro do teste.**
-*Origem:* o guarda de `/var/www` do `b2-criar-chave.sh` "falhou" num teste meu. O guarda
-estava certo; meu caminho de teste é que não casava com o padrão.
+*Reincidiu 3× em 12/08, sempre corretamente:* `nginx -t` faltando `fastcgi.conf` no prefixo de
+teste, `install` recusando `-o micasa-deploy` inexistente, e `assertOk()` esperando 200 onde a
+API devolve 201.
 
 **D3 — Pergunta obrigatória antes de aceitar verde:** *"se o comportamento estivesse quebrado,
 este teste ficaria vermelho?"* Se não for um sim claro, o teste não vale.
-*(Regra antiga, já na memória, e continua sendo violada.)*
+**Melhor ainda: MEÇA.** Reverta o código e rode:
+```bash
+git checkout HEAD~1 -- app/ routes/ config/ && php artisan test tests/…
+git checkout HEAD -- app/ routes/ config/
+```
+*Funcionou em 12/08:* 13 dos 20 testes novos ficaram vermelhos sem a correção, e os 7 verdes
+eram controles de propósito.
+
+**D4 — CI verde não prova nada sobre o que o CI não roda.** ⭐ novo em 12/08
+Os jobs são Pint, Larastan, Pest, oxlint, tsc, Vitest e os dois `audit`. **Nenhum** exercita
+shell script, configuração de nginx, sudoers ou o `deploy.sh`. Para essas, o teste é outro:
+`bash -n`, `visudo -c -f`, `nginx -t` num prefixo de teste, harness de binários falsos.
+*Funcionou em 12/08:* subi um nginx de verdade numa porta alta e medi os cabeçalhos em cinco
+tipos de resposta; e rodei o `criar-conta-deploy.sh` com dublês em quatro cenários.
 
 ### E. Ao TERMINAR
 
-**E1 — Registro no mesmo turno da correção.**
-Mudou código? Atualize PR/issue **agora**, não no fim.
-*Origem:* fiz cinco correções seguidas sem tocar no checklist da PR. O dev reclamou, com
-razão, que perdeu a rastreabilidade do que estava acontecendo.
+**E1 — Registro no mesmo turno da correção.** Mudou código? Atualize PR/issue **agora**.
 
 **E2 — `gh pr edit --body-file` falha em silêncio** neste repositório (erro de GraphQL sobre
-Projects clássicos). ✅ VERIFICADO. Use:
+Projects clássicos). ✅ VERIFICADO. `gh issue view --comments` falha pelo mesmo motivo. Use:
 ```bash
 python3 -c "import json,io; io.open('/tmp/b.json','w').write(json.dumps({'body': io.open('/tmp/corpo.md').read()}))"
 gh api -X PATCH repos/chbionde/micasa/pulls/NN --input /tmp/b.json
+gh api repos/chbionde/micasa/issues/NN --jq '.body'          # ler issue
+gh api repos/chbionde/micasa/issues/NN/comments --jq '.[].body'
 ```
+⚠️ `gh pr checks NN --json` **não existe** nesta versão do `gh`. Para status de CI use
+`gh api repos/chbionde/micasa/commits/SHA/check-runs`.
+
+**E3 — PR mergeada = branch encerrada.** ⭐ novo em 12/08
+Commit novo exige **branch nova e PR nova**.
+*Origem:* empurrei um commit para a branch da PR #59 depois de ela já ter sido mergeada. O
+commit ficou órfão, sem PR, e o dev teve que mergear na `main` à mão. Ele cobrou.
+
+**E4 — `git add -A` varre o que não é seu.** ⭐ novo em 12/08
+*Origem:* o dev colocou uma pasta `publicar/` na raiz com logs do Actions **para eu ler**. O
+`git add -A` a commitou junto. Antes de commitar: `git status --short`, e prefira
+`git add <caminhos>`.
 
 ---
 
 ## 2. COMPORTAMENTO QUE O DEV EXIGE
 
-- **Segurança tem prioridade, sempre.** Regra dada pelo dev em 10/08/2026. Quando houver
-  conflito entre entregar rápido e fechar um risco, o risco vence — e a escolha se explicita,
-  não se faz em silêncio.
-- **Sinceridade acima de agradabilidade.** Sem elogio de cortesia. Se a ideia dele for ruim,
-  diga por quê. Ele repetiu isso várias vezes.
-- **Sem achismo.** Fatos concretos, de fontes seguras. Ver protocolo A1.
+- **Segurança tem prioridade, sempre.** Quando houver conflito entre entregar rápido e fechar
+  um risco, o risco vence — e a escolha se explicita. Ele reafirmou em 12/08 que limitação de
+  hardware **não** é argumento para relaxar segurança: *"a VPS podemos mudar no futuro"*.
+- **Sinceridade acima de agradabilidade.** Regra reforçada em 12/08, com todas as letras:
+  *"não quero que você concorde com algo só porque falei, preciso que você avalie e discorde de
+  mim quando necessário"*. Concordar por conveniência é falha de entrega.
+- **Sem achismo.** Ver A1.
 - **Uma pergunta por vez**, com as opções e o custo de cada uma à vista.
-- **Conflito com plano/fatia/ADR:** diga E analise a consequência **antes** de perguntar.
-- **Sem sugestões fantasma.** Mudança fora do planejado só se pontual, importante e registrada
-  como emenda de ADR. Se você acrescentar algo ao escopo, **destaque na PR para ele vetar**.
-- **Uma issue por vez, sem empilhar PRs.** Branch `tipo/NN-descricao` a partir da `main`, PR
-  com `Closes #NN`, CI verde. **O merge por squash é dele — nunca faça.**
+- **Sem sugestões fantasma.** Se acrescentar algo ao escopo, **destaque na PR para ele vetar**.
+- **Uma issue por vez, sem empilhar PRs.** Branch `tipo/NN-descricao` a partir da `main`, PR com
+  `Closes #NN`, CI verde. **O merge é dele — nunca faça.**
 - **Commits em Conventional Commits, sem `Co-Authored-By`.** Multi-linha via `git commit -F -`
   com heredoc. O corpo explica *por quê*.
-- **Documento didático** em `docs/aprendizado/NN-titulo.md` ao fim de toda tarefa
-  multi-comando, para leigo. **O próximo é o 12.**
-- **Modo tutor de React obrigatório** em toda entrega de front: por que aqui, e qual seria a
-  alternativa.
-- **Segredos: avise ANTES**, na mesma mensagem em que pedir para ele manipular um. "Não cole
-  aqui, eu não preciso." Já custou uma chave revogada.
+- **Documento didático** em `docs/aprendizado/NN-titulo.md` ao fim de toda tarefa multi-comando.
+  **O próximo é o 13.**
+- **Modo tutor de React obrigatório** em toda entrega de front.
+- **Segredos: avise ANTES**, na mesma mensagem em que pedir para ele manipular um.
 - Ele **valoriza que você segure o merge** quando a issue não está de fato resolvida.
 
-**Sobre o tom dele:** o dev ficou irritado no fim desta sessão, com motivo. Não seja defensivo
-nem se rebaixe. Corrija o que for erro seu, e recuse premissa falsa quando for o caso — com
-uma frase, sem sermão.
+> 🚫 **PROIBIÇÃO ATIVA, dada em 12/08:** *"Você está proibido de criar qualquer issue nova para
+> infra ou segurança por agora até terminarmos o que está aberto. NÃO VIOLE ESTA REGRA ATÉ EU
+> MANDAR."* Vale até ele liberar. PR não é issue — PRs continuam normais.
+
+**Sobre o tom:** ele terminou 12/08 cansado de dois dias de infraestrutura com erros repetidos.
+Não seja defensivo nem se rebaixe. Corrija o que for erro seu em uma ou duas frases, recuse
+premissa falsa quando for o caso, e entregue verificado.
 
 ---
 
 ## 3. FERRAMENTAS EM USO
 
-| Ferramenta | Para quê | Onde ficam as credenciais |
+| Ferramenta | Para quê | Credenciais |
 |---|---|---|
-| **GitHub** `chbionde/micasa` | Código, issues, milestones, PRs, Actions. **Repositório é PÚBLICO** ✅ | `gh` CLI já autenticado no WSL |
-| **Oracle Cloud** | VPS `micasa-prod`, `VM.Standard.E2.1.Micro`, Ubuntu 24.04, 1 GB RAM, IP reservado `167.126.4.86`, região `sa-vinhedo-1`. **Always Free sem PAYG — nunca clicar em "Faça upgrade"** | Chave SSH `~/.ssh/id_ed25519` (com passphrase) |
-| **Backblaze B2** | Backup. Bucket `micasa-backups`, ID `83d31c711f11e94497f40a1c`, endpoint `s3.us-east-005.backblazeb2.com` | `B2_KEY_ID` e `B2_APP_KEY` no `api/.env` **da VPS e só lá** |
-| **DuckDNS** | Domínio `micasa-bionde.duckdns.org` (gratuito) | — |
-| **Let's Encrypt / certbot** | TLS. Certificado válido até **05/11/2026** ✅; `certbot renew --dry-run` testado com sucesso ✅ | — |
-| **Healthchecks.io** | Vigia do backup (interruptor de homem morto) | `BACKUP_PING_URL` no `.env` da VPS |
-| **age** | Cifragem do backup, modo assimétrico | Pública no `.env`; **privada em `~/.ssh/micasa-backup.age-key` no WSL do dev, nunca na VPS** |
+| **GitHub** `chbionde/micasa` | Código, issues, PRs, Actions. **Repositório PÚBLICO** ✅ | `gh` CLI autenticado no WSL |
+| **Oracle Cloud** | VPS `micasa-prod`, `VM.Standard.E2.1.Micro`, Ubuntu 24.04, 1 GB RAM, IP `167.126.4.86`, `sa-vinhedo-1`. **Always Free — nunca clicar em "Faça upgrade"** | Chave pessoal `~/.ssh/id_ed25519`, comentário `micasa-oracle`, com passphrase |
+| **Backblaze B2** | Backup. Bucket `micasa-backups`, ID `83d31c711f11e94497f40a1c` | `B2_*` no `api/.env` **da VPS e só lá** |
+| **DuckDNS** | `micasa-bionde.duckdns.org` | — |
+| **Let's Encrypt** | TLS até **05/11/2026** ✅ | — |
+| **Healthchecks.io** | Vigia do backup | `BACKUP_PING_URL` no `.env` da VPS |
+| **age** | Cifragem do backup, assimétrico | Pública no `.env`; **privada em `~/.ssh/micasa-backup.age-key` no WSL, nunca na VPS** |
 
 **Stack:** Laravel 12 + PHP 8.4 (`api/`), React + TS + Vite (`web/`), SQLite com WAL.
 Pest, Larastan 6, Pint, Vitest, oxlint, tsc.
 
-**Skills instaladas em `~/.claude/skills/`** (41, de `mattpocock/skills` e
-`juliusbrussee/caveman`): `grilling`, `grill-me`, `tdd`, `research`, `domain-modeling`,
-`diagnosing-bugs`, `codebase-design`, `wizard`, entre outras. ⚠️ O `code-review` do pocock
-**não** foi instalado, para não colidir com o embutido. **Skill nova só aparece ao iniciar
-sessão.** O `claude` que o WSL enxerga é o binário do **Windows**, então
-`claude plugins install` daqui instala no perfil errado — skills se instalam copiando pastas
-para `~/.claude/skills/`.
-
 ---
 
-## 4. ESTADO EM 10/08/2026
+## 4. ESTADO EM 12/08/2026 ✅
 
-### Fatia 0 — FECHADA ✅
-Milestone com 0 issues abertas e 5 fechadas. Verificado pela API do GitHub.
+### Suíte verde
+Pint · Larastan 6 (0 erros) · **162 Pest / 481 asserções** · oxlint · tsc · **32 Vitest** ✅
+(era 127/359 e 28 no início do dia)
 
 ### Produção
-- ✅ https://micasa-bionde.duckdns.org — `/up` responde 200
-- ✅ Merge na `main` publica sozinho (~35s). Último deploy: todos os passos verdes
-- ✅ **Backup diário funcionando e RESTAURAÇÃO TESTADA com dados reais** (`users 3`,
-  `households 3`, `household_user 3`) — o item mais difícil da DoD
-- ✅ Cron às 06:00 UTC = 03:00 São Paulo; log em `journalctl -t micasa-backup`
-- ✅ fail2ban ativo, jail `sshd`, `bantime` 3600, via **nftables** (não iptables)
-- ✅ Dependabot, secret scanning e push protection ligados
-- ✅ `main` protegida: force-push e deleção bloqueados, inclusive para admin
-- ⚠️ Status check **não** é obrigatório na `main`, de propósito: exigi-lo mataria a exceção
-  documentada em `docs/fluxo-trabalho.md:23` de commit `docs:` direto na main. Decisão do dev
-  ainda em aberto
+- ✅ https://micasa-bionde.duckdns.org — `/up` 200
+- ✅ Merge na `main` publica sozinho
+- ✅ **O deploy entra como `micasa-deploy`**, conta sem senha cujo único poder de root é rodar
+  `/usr/local/sbin/micasa-pos-deploy`. Medido: secret trocado 19:27:04, deploy verde 19:27:52
+- ✅ CSP em produção, em **dois** cabeçalhos: um que bloqueia (`object-src`, `base-uri`,
+  `frame-ancestors`, `form-action`) e um `-Report-Only` com a política estrita
+- ✅ Backup diário cifrado, restauração testada
+- ✅ fail2ban, Dependabot, secret scanning, `main` protegida
+- ❌ **HSTS ainda ausente** — é a #54, não começada
+- ⚠️ **O BANCO ESTÁ VAZIO.** O dev rodou `infra/limpar-banco.sh` em 12/08. Zero contas —
+  ninguém consegue entrar até alguém se cadastrar. As senhas antigas, que escapavam da política
+  nova, deixaram de existir junto
 
-### ❌ NÃO É VERDADE, apesar de estar escrito por aí
-- ❌ **"Alguém usou o sistema"** — as 3 contas são testes do dev e de amigos. Confirmado por
-  ele. 0 listas de compras, 0 itens. A DoD "está em produção e alguém da casa usou"
-  **NÃO está cumprida**
-- ❌ **"Há uma casa órfã no banco"** (issue #43) — não há. 3 casas, 1 membro cada ✅
-- ❌ **"Write Only do B2 concede só `writeFiles`"** (issue #44) — falso, incluía
-  `deleteFiles`. Já corrigido na issue e a chave foi recriada com `writeFiles` apenas ✅
+### 🪤 ARMADILHA QUE CUSTOU HORAS
+**Mudança em `infra/nginx/` NÃO sai no deploy.** O deploy builda o front, faz `rsync` do `dist`
+e roda o `deploy.sh` — **não encosta no nginx**. Enquanto ninguém aplicar, o repositório diz uma
+coisa e a produção faz outra. Para aplicar, na VPS:
+```bash
+cd /var/www/micasa && git pull --ff-only && ./infra/aplicar-nginx.sh
+```
+O `aplicar-nginx.sh` também **restaura o TLS**: regenerar o site a partir do template apaga as
+linhas que o certbot escreveu, e esquecer isso devolve o site em HTTP puro sem erro visível.
 
-### Achado real, ainda em aberto
-- ⚠️ **Apagar usuário deixa sessão órfã**: existe linha em `sessions` com `user_id=2`, e os
-  usuários 1–3 não existem mais. Prova para o item D da #43
+### Scripts de infra (todos com `--conferir`/`--testar` ou guardas)
+| Script | Quando roda |
+|---|---|
+| `provision.sh` | Uma vez por VPS. **Exige `DOMINIO=`** |
+| `deploy.sh` | A cada publicação, pela Action |
+| `micasa-pos-deploy.template` | Os 3 passos que exigem root; instalado em `/usr/local/sbin/` |
+| `criar-conta-deploy.sh` | Uma vez por VPS. Cria a conta de deploy e a regra de sudo |
+| `aplicar-nginx.sh` | Sempre que `infra/nginx/` mudar |
+| `limpar-banco.sh` | À mão, raramente. **Destrutivo**, com backup obrigatório antes |
+| `backup.sh` · `restaurar.sh` · `b2-criar-chave.sh` | Backup |
 
 ---
 
@@ -227,103 +286,90 @@ Milestone com 0 issues abertas e 5 fechadas. Verificado pela API do GitHub.
 
 | Fonte | Conteúdo |
 |---|---|
-| `prompt-casa-os.md` | Contrato: papéis, agentes, Definition of Done, anti-padrões |
-| **GitHub issues e comentários** | Decisões operacionais recentes. As correções de fato da #43 e #44 estão **em comentários**, não no corpo |
-| `docs/decisoes.md` | ADRs 001–020 + emendas datadas. A emenda de 10/08 ao **ADR-009** é a mais recente |
-| `docs/plano-fatias.md` | As 9 fatias |
-| `docs/fluxo-trabalho.md` | Fluxo GitHub; a regra de não empilhar PRs; a exceção de `docs:` direto na main |
-| `docs/escopo-v1.md` · `docs/modelo-dominio.md` | O que entra/fica fora; entidades e invariantes |
-| `docs/como-executar-e-testar.md` | Guia vivo. ⚠️ **Desatualizado**: ainda diz "Fatia 2 em andamento" e não menciona backup |
-| `infra/README.md` | Runbook da VPS + tabela sintoma→causa (17 linhas) ✅ |
-| `docs/aprendizado/01..11` | Documentos didáticos. O **11** cobre backup e é o mais recente |
-| Memória em `~/.claude/projects/-home-carlosbionde-code-micasa/memory/` | 7 memórias sobre ambiente, VPS, fluxo e erros a evitar |
+| `prompt-casa-os.md` | Contrato: papéis, DoD, anti-padrões |
+| **GitHub issues** | Decisões operacionais recentes |
+| `docs/seguranca.md` | ⭐ **Novo.** Resultado da varredura #43: 13 achados, o que foi medido e como, e o que a varredura **não** cobriu. Linha de base da próxima |
+| `docs/decisoes.md` | ADRs 001–020 + emendas datadas |
+| `docs/plano-fatias.md` · `docs/escopo-v1.md` · `docs/modelo-dominio.md` | Plano e domínio |
+| `docs/fluxo-trabalho.md` | Fluxo GitHub; exceção de `docs:` direto na main |
+| `docs/como-executar-e-testar.md` | ⚠️ **Desatualizado**: diz "Fatia 2 em andamento", não menciona backup nem segurança |
+| `infra/README.md` | Runbook da VPS. Contém o **modelo de passo a passo** que o dev aceita |
+| `docs/aprendizado/01..12` | O **12** cobre a varredura de segurança e é o mais recente |
+| Memória em `~/.claude/projects/-home-carlosbionde-code-micasa/memory/` | 8 memórias |
 
 ---
 
 ## 6. AMBIENTE — armadilhas confirmadas ✅
 
-- Repo em **`/home/carlosbionde/code/micasa`** (não `~/micasa`)
-- **PHP 8.4** obrigatório (o `composer.lock` exige ≥ 8.4.1); Node 22 via nvm, que **não carrega
-  em shell não-interativo**: `export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use 22`
-- `sudo` **pede senha**
-- `git push` emite erro do Git Credential Manager do Windows, mas **funciona** — há um
-  `credential.helper` local no repo
-- **Acesso à VPS** (a chave tem passphrase, o shell não persiste entre comandos):
-  ```bash
-  ssh-agent -a /tmp/micasa-agent.sock
-  SSH_AUTH_SOCK=/tmp/micasa-agent.sock ssh-add ~/.ssh/id_ed25519   # o dev digita a senha
-  SSH_AUTH_SOCK=/tmp/micasa-agent.sock ssh ubuntu@167.126.4.86
-  ```
-  ⚠️ O agente **caiu no fim desta sessão**; será preciso refazer.
-- ⚠️ **O classificador de permissões bloqueia comandos que alteram estado na VPS**
-  (`systemctl reboot`, `git checkout` remoto foram recusados). Leitura e diagnóstico passam.
-  Planeje: diagnóstico você faz; mudança vai como passo a passo para o dev, e você confere
-  depois por leitura. **Não tente contornar.**
-- Suíte verde em 10/08: Pint · Larastan 6 (0 erros) · **127 Pest / 359 asserções** · oxlint ·
-  tsc · **28 Vitest** ✅
+- Repo em **`/home/carlosbionde/code/micasa`**
+- **PHP 8.4** obrigatório; Node 22 via nvm, que **não carrega em shell não-interativo**:
+  `export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use 22`
+- `sudo` **pede senha** no WSL
+- `git push` emite erro do Git Credential Manager do Windows, mas **funciona**
+- ⚠️ **O classificador de permissões bloqueia comandos que alteram estado na VPS.** Leitura e
+  diagnóstico passam. Planeje: diagnóstico você faz; mudança vai como passo a passo para o dev
+  (formato B2), e você confere depois por leitura. **Não tente contornar.**
+- `pgrep -f <padrão>` **casa com a própria linha de comando** — um `pkill -f` derrubou o shell
+  da sessão. Use `pgrep -a <programa>`
+- Ferramentas locais disponíveis para teste real: `nginx`, `visudo`, `age`, `sqlite3`,
+  `man`. **Docker não é utilizável.**
 
 ---
 
 ## 7. O QUE FAZER AGORA
 
-Issues abertas:
+### Issues abertas
 
-| Issue | Milestone | O que é |
+| Issue | O que é | Estado real |
 |---|---|---|
-| **#35** | Fatia 2 | Duplicar lista + autocomplete do histórico escopado pela casa |
-| **#36** | Fatia 2 | Front das listas, mobile-first, **RHF + Zod** (emenda do ADR-006). Modo tutor obrigatório |
-| **#48** | — | **SMTP: "esqueci minha senha" não entrega nada em produção.** Funcionalidade #28 entregue, mergeada e quebrada por configuração |
-| **#43** | — | Varredura de segurança. Corpo já corrigido com os achados de 10/08 |
-| #7–#12 | Fatias 3–8 | Épicos futuros, não mexer |
+| **#53** | CSP ausente | Código no ar em modo relato. **Falta só o dev conferir o console numa janela anônima.** A aplicação está limpa — medido: HTML e CSS de produção sem nenhuma referência externa. A violação que ele viu era extensão do navegador dele |
+| **#54** | HSTS ausente | **Não começada.** Critério de aceite já ajustado: fecha em `max-age=2592000` (30 dias), com a subida para um ano como passo posterior sem dono |
+| **#55** | Chave de deploy com poder de root | **Quase fechada.** Passos 1–6 feitos e verificados; falta o **passo 7** (remover a chave de deploy antiga do `authorized_keys` do `ubuntu`), reescrito no `infra/README.md` sem depender do `nano` |
+| **#48** | SMTP não entrega em produção | Não começada |
+| **#35 · #36** | Fatia 2 — listas de compras | Não começadas. #36 é front: **modo tutor obrigatório** |
+| #7–#12 | Épicos das fatias 3–8 | Não mexer |
 
-### Ordem decidida pelo dev em 10/08/2026 — não reabrir sem gatilho
+### Ordem decidida pelo dev
 
 ```
-#43  (varredura de segurança)   →   #48  (SMTP)   →   Fatia 2 (#35, #36)
+#53, #54, #55  (sub-issues da varredura)   →   #48 (SMTP)   →   Fatia 2 (#35, #36)
 ```
 
-**A lógica, nas palavras dele:** *"encerramos pendências soltas e depois continuamos o
-planejamento"*. As duas issues transversais não têm milestone e ficariam eternamente
-adiadas pelo próximo item planejado; fechá-las primeiro devolve o backlog a um estado em que
-só existe o plano.
+Ele decidiu em 12/08 que as três sub-issues vêm **antes** da #48: *"pendências soltas primeiro
+e depois o planejamento já existente, assim evitamos débito técnico futuro"*. Não reabra.
 
-Isso **contraria** a leitura literal do `plano-fatias.md`, que manda seguir fatia a fatia.
-É decisão consciente do dev, tomada com o custo à vista, e a #43 é a primeira porque
-**segurança tem prioridade**. Não a reabra por conta própria.
+### Primeira ação
 
-**Comece a #43 assim:** o corpo dela já foi corrigido em 10/08 com os achados desta sessão —
-sete frentes de checklist, três itens já marcados com evidência, e uma seção de correções de
-fato. Leia o corpo **e** os comentários antes de planejar. Ela é auditoria, então o formato
-de entrega é: cada item vira "confirmado seguro, com o teste que prova" ou "achado, com issue
-própria e severidade".
+1. Ler `prompt-casa-os.md`
+2. Conferir estado: `git log --oneline -5`, `gh issue list`, suíte verde
+3. **Perguntar ao dev qual das três sub-issues retomar**, porque todas dependem de ação dele:
+   - #53 depende do console na janela anônima
+   - #55 depende do passo 7
+   - #54 é a única que dá para começar sozinho — mas exige `aplicar-nginx.sh` na VPS, que é ele
+4. **Não crie issue de infra ou segurança.** Ver a proibição na seção 2
 
 ### O item de produto que ninguém levantou ainda
 
 A DoD diz *"está em produção e alguém da casa usou"*, e o `plano-fatias.md` manda perguntar ao
 fim de cada fatia *"a família está usando?"* — e se não, **parar e descobrir por quê**.
 
-Isso nunca foi feito. Três fatias entregues, zero uso real. Não é bloqueio para a ordem
-acima, mas é conversa que vale mais que código novo, e o momento natural é ao fim da #48,
-antes de abrir a Fatia 2.
+Isso nunca foi feito, e agora está pior: **o banco foi limpo, então há literalmente zero contas
+no sistema.** Três fatias entregues, zero uso real. É conversa que vale mais que código novo, e
+o momento natural é ao fim da #48.
 
 ### Pendências pequenas, registradas e sem dono
-- Decidir se o status check vira obrigatório na `main` (custa a exceção de `docs:` direto)
-- `docs/como-executar-e-testar.md` está desatualizado
-- Object Lock no B2 continua adiado. Gatilho: existir volume real para dimensionar com números
-- Rotação da credencial do B2 com `validDurationSeconds` — agora é seguro, porque o vigia
-  existe e avisaria se a chave expirasse
-- O dev precisa manter **cópia da chave privada `age` fora do WSL**. É o único segredo
-  insubstituível do projeto
+- `docs/como-executar-e-testar.md` desatualizado
+- Status check obrigatório na `main` — decisão adiada; hoje é possível, porque os jobs têm nomes
+  distintos e não há filtro de `paths:`
+- Object Lock no B2 — gatilho: existir volume real
+- Rotação da credencial do B2 com `validDurationSeconds`
+- `publicar/` está na raiz do repositório, **não rastreada e não ignorada**. São logs do Actions
+  que o dev colou para leitura. Um `git add -A` a commitaria de novo
+- A promoção da CSP estrita a bloqueante é **uma linha** em
+  `infra/nginx/cabecalhos-seguranca.conf`, depois que o console estiver limpo
 
 ### Já resolvido — não peça de novo (protocolo B5)
-- ✅ `~/restaurado.sqlite` apagado — conferido em 10/08
-- ✅ Cópia da chave privada `age` feita para fora do WSL — o dev confirmou. **Onde ela está é
-  informação dele; não pergunte e não precise saber.** A que fica na máquina está em
-  `~/.ssh/micasa-backup.age-key`, modo `600` ✅
-
-### Primeira ação
-1. Ler `prompt-casa-os.md`
-2. Conferir estado: `git log --oneline -5`, `gh issue list`, suíte verde
-3. **Começar a #43.** A ordem já está decidida — não há pergunta a fazer sobre prioridade.
-   Se algo no repositório contradisser esta ordem, traga a contradição ao dev em vez de
-   escolher sozinho
+- ✅ Banco de produção limpo, com backup cifrado tirado antes
+- ✅ Conta `micasa-deploy` criada, wrapper instalado, sudo restrito, chave rotacionada, secrets
+  atualizados, deploy verde por ela
+- ✅ Cópia da chave privada `age` fora do WSL — **onde ela está é informação dele; não pergunte**
