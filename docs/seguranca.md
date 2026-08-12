@@ -11,9 +11,13 @@ sobre o estado do sistema ou tem um comando/teste por trás, ou não entra.
 
 | Marca | Significa |
 |---|---|
-| ✅ | Confirmado seguro, com o teste ou a medição que prova |
-| ❌ | Achado, com issue própria e severidade |
+| ✅ | Confirmado seguro, com o teste ou a medição que prova — ou achado já corrigido |
+| ❌ | Achado em aberto, com severidade |
 | ℹ️ | Observação sem risco direto — desvio de padrão ou informação de contexto |
+
+Cada achado guarda a **descrição original, no tempo presente em que foi escrita**, e ganha um
+bloco **Situação** embaixo quando é fechado. O histórico de por que a decisão foi tomada vale
+mais do que um texto reescrito para parecer que sempre esteve certo.
 
 **Severidade**, como usada aqui:
 
@@ -40,7 +44,11 @@ Dito primeiro, porque a ausência é o que costuma virar falsa sensação de cob
 
 ## 2. Achados
 
-### ❌ A1 — Trocar o e-mail não exige a senha atual · **Alta**
+13 achados. **7 fechados na própria #43** — o bloco de conta e sessão, A1 a A7, que era o
+único não observável de fora e por isso o único cuja publicação valia esperar. Os 6 restantes
+seguem em aberto: A8, A9 e A10 em sub-issues, e A11 a A13 numa segunda PR desta issue.
+
+### ✅ A1 — Trocar o e-mail não exigia a senha atual · **Alta** — CORRIGIDO
 
 `PATCH /api/user/profile` aceita um e-mail novo com a sessão apenas. `UpdateProfileRequest`
 valida formato e unicidade, e mais nada.
@@ -55,9 +63,15 @@ A consequência não é o roubo da sessão — é o que ele passa a valer. A cad
 Um acesso temporário vira posse permanente. É isso que a exigência de senha na troca de e-mail
 existe para cortar.
 
-**Correção:** exigir `current_password` quando o campo `email` mudar, e avisar o endereço antigo.
+**Situação:** Corrigido nesta issue. `UpdateProfileRequest` passou a exigir `current_password` quando o
+e-mail muda — e só quando muda, para trocar o nome não virar cerimônia. Na tela de conta o
+campo aparece junto com a mudança, explicando o motivo. Regressão em
+`tests/Feature/Security/ContaESessaoTest.php`, incluindo a cadeia inteira.
 
-### ❌ A2 — Trocar a senha não derruba as outras sessões · **Alta**
+O que **não** entrou: avisar o endereço antigo por e-mail. Depende da #48 (SMTP não entrega
+nada em produção) e seria aviso que não chega.
+
+### ✅ A2 — Trocar a senha não derrubava as outras sessões · **Alta** — CORRIGIDO
 
 `AccountController::updatePassword` regenera **a sessão de quem pediu**. As demais continuam
 válidas: o middleware `AuthenticateSession` do Laravel, que amarra a sessão ao hash da senha,
@@ -69,10 +83,15 @@ Isoladamente é ruim; junto com A1, é o que impede a vítima de retomar a conta
 é a primeira coisa que qualquer pessoa faz ao desconfiar de invasão, e aqui ela não expulsa
 ninguém.
 
-**Correção:** registrar `AuthenticateSession` no grupo `web`, ou apagar as sessões do usuário
-na troca de senha.
+**Situação:** Corrigido nesta issue pela action `ForgetSessions`, que apaga as linhas de `sessions` do
+usuário e preserva a de quem pediu a troca.
 
-### ❌ A3 — A política de senha é `min:8` e nada mais · **Alta**
+A alternativa considerada era registrar o middleware `AuthenticateSession`. Ficou de fora: ele
+muda a semântica de sessão do app inteiro e cobra uma consulta por requisição para resolver o
+mesmo problema que três linhas resolvem, num projeto cujo driver de sessão já é o banco.
+A dependência de `SESSION_DRIVER=database` está anotada na própria action.
+
+### ✅ A3 — A política de senha era `min:8` e nada mais · **Alta** — CORRIGIDO
 
 `Password::defaults()` é usado em três pontos (cadastro, troca e redefinição), mas **nunca foi
 configurado** — nenhuma chamada `Password::defaults(fn () => ...)` existe no projeto. O padrão
@@ -90,11 +109,22 @@ Medido diretamente na regra efetiva:
 O cadastro é público e não há segundo fator. A senha é a única barreira da conta, e hoje ela
 aceita as três primeiras entradas de qualquer lista de senhas comuns.
 
-**Correção:** `Password::defaults(fn () => Password::min(10)->uncompromised())` no
-`AppServiceProvider`. O `uncompromised()` consulta o Have I Been Pwned por k-anonimato — envia
-os 5 primeiros caracteres do SHA-1, nunca a senha.
+O `uncompromised()` consulta o Have I Been Pwned por k-anonimato — sai só o prefixo de 5
+caracteres do SHA-1, nunca a senha.
 
-### ❌ A4 — Sem limite de tentativas em `/api/user/password` e `DELETE /api/user` · **Média**
+**Situação:** Corrigido nesta issue: `Password::defaults()` passou a ser `min(10)` mais `uncompromised()`.
+
+Duas decisões que valem registro. **Comprimento em vez de composição** — exigir maiúscula,
+número e símbolo empurra a pessoa para `Senha@123`, longa o bastante para o formulário e curta
+o bastante para o dicionário de ataque; o NIST 800-63B desaconselha composição obrigatória
+desde 2017. E **o timeout do verificador caiu de 30 s para 3 s**: numa VPS de 1 GB, meio minuto
+de cadastro pendurado terminaria aceitando a senha do mesmo jeito, porque o `NotPwnedVerifier`
+falha aberto.
+
+⚠️ A política vale para senha nova. **As senhas já existentes continuam como estavam** — se
+alguma das 3 contas de teste usa senha fraca, ela segue fraca até ser trocada.
+
+### ✅ A4 — Sem limite de tentativas nas rotas de conta · **Média** — CORRIGIDO
 
 Medido: 25 chutes seguidos de `current_password`, todos respondidos com 422, **nenhum 429**.
 O mesmo em `DELETE /api/user`, que também pede a senha.
@@ -112,7 +142,11 @@ as de conta não receberam. Levantamento por `route:list`:
 | Grupo `households/{household}` | `throttle:30,1` |
 | `GET /api/user` · `PATCH /api/user/profile` · `PUT /api/user/password` · `DELETE /api/user` · `PUT /api/user/active-household` · `GET /api/households` | **nenhum** |
 
-### ❌ A5 — `/login` limita por e-mail+IP, o que não barra password spraying · **Média**
+**Situação:** Corrigido nesta issue. Nenhuma rota autenticada ficou sem teto: `conta-sensivel` (6/min por
+conta, 20/min por IP) nas três que conferem senha, `conta-leitura` (60/min) nas de leitura e
+troca de contexto.
+
+### ✅ A5 — `/login` limitava por e-mail+IP, o que não barra password spraying · **Média** — CORRIGIDO
 
 A chave do limitador é `email|ip` (`LoginRequest::throttleKey`). Ela protege bem uma conta
 específica, e não protege nada contra o ataque inverso: **uma senha comum contra muitas contas**.
@@ -122,9 +156,11 @@ Medido: 20 e-mails distintos, uma tentativa em cada, mesma origem — nenhum 429
 Combina com A3: senha fraca permitida e spraying sem barreira são o mesmo ataque visto de dois
 lados. Há ainda um custo de máquina — cada tentativa é um bcrypt na VPS de 1 GB com 1/8 de OCPU.
 
-**Correção:** somar um limite por IP ao limite por e-mail.
+**Situação:** Corrigido nesta issue com um limitador de rota por IP (10/min), somado ao limite por e-mail+IP
+que já existia. As duas camadas não se confundem porque agem em ordens de grandeza diferentes:
+quem erra a própria senha esbarra no limite por e-mail muito antes das 10 requisições.
 
-### ❌ A6 — `PATCH /api/user/profile` enumera e-mails sem limite · **Média**
+### ✅ A6 — `PATCH /api/user/profile` enumerava e-mails sem limite · **Média** — CORRIGIDO
 
 `Rule::unique('users')` responde 422 quando o e-mail pertence a outra pessoa e 200 quando não
 pertence. Sem rate limit (ver A4), isso é um oráculo: dá para descobrir quem tem conta no
@@ -135,7 +171,11 @@ sistema testando endereços, na velocidade que a rede aguentar.
 ℹ️ Enumeração por unicidade de e-mail é um custo conhecido de qualquer cadastro que impeça
 e-mail duplicado — a escolha aqui é **quanto** custa explorá-la, não se ela existe.
 
-### ❌ A7 — Apagar a conta deixa sessão e token de redefinição para trás · **Baixa**
+**Situação:** Corrigido junto de A4 — a rota entrou no `conta-sensivel`. **O vazamento em si continua e não
+tem conserto**: impedir e-mail duplicado e esconder se um e-mail existe são objetivos
+incompatíveis. O que mudou é o custo de explorá-lo, que era zero.
+
+### ✅ A7 — Apagar a conta deixava sessão e token de redefinição para trás · **Baixa** — CORRIGIDO
 
 Duas sobras, ambas medidas:
 
@@ -153,6 +193,9 @@ dentro da validade do token, o link antigo redefine a senha da **conta nova**.
 
 Isto substitui a antiga anotação de "casa órfã no banco", que foi medida em 10/08/2026 e **não
 existe** — são 3 casas, com 1 membro cada.
+
+**Situação:** Corrigido nesta issue: `DeleteAccount` passou a apagar as sessões e o token de redefinição
+pendente, dentro da mesma transação que apaga a conta.
 
 ### ❌ A8 — Sem `Content-Security-Policy` · **Média**
 
