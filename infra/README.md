@@ -314,18 +314,78 @@ a linha:
 
 Se esse aviso aparecer, o passo 2 não foi aplicado — pare e volte nele.
 
-**Só depois do deploy verde**, remova a chave de deploy antiga da sua conta, na VPS:
+**Só depois do deploy verde**, remova a chave de deploy antiga da conta `ubuntu`.
+
+Não faça isso no `nano`. Editar `authorized_keys` à mão é como se perde acesso a um servidor —
+uma linha errada apagada e você não entra mais. O caminho abaixo tem cópia de segurança,
+conferência antes de aplicar, e um teste que você faz **sem fechar a sessão atual**.
+
+**7a. Ver o que existe hoje**, com número de linha:
 
 ```bash
-nano ~/.ssh/authorized_keys
+cat -n ~/.ssh/authorized_keys | cut -c1-60
 ```
 
-Apague **apenas** a linha que termina com o comentário `micasa-deploy` antigo. ⚠️ **Não apague a
-linha da sua chave pessoal** — é ela que te dá acesso à máquina.
+**Saída esperada:** duas linhas. Uma termina em `micasa-oracle` — **essa é a sua chave pessoal,
+ela FICA**. A outra termina em `micasa-deploy (github actions)` — essa é a de deploy antiga, e é
+a que sai.
 
-**Confira que você ainda entra**, abrindo uma segunda sessão SSH **sem fechar a atual**. Se a
-nova sessão funcionar, está feito. Se não funcionar, você ainda tem a sessão aberta para
-desfazer.
+> Como saber que `micasa-oracle` é a sua: é o comentário da sua chave local, que você confere
+> com `awk '{print $3, $4}' ~/.ssh/id_ed25519.pub` na sua máquina.
+
+**7b. Guardar uma cópia e montar a versão nova:**
+
+```bash
+cp ~/.ssh/authorized_keys ~/.ssh/authorized_keys.bak
+grep -v 'micasa-deploy' ~/.ssh/authorized_keys > /tmp/ak.novo
+cat -n /tmp/ak.novo | cut -c1-60
+```
+
+**Saída esperada:** **uma** linha, terminando em `micasa-oracle`.
+
+**Se divergir:** se vier vazio ou sem a linha `micasa-oracle`, **pare** — não aplique. Nada foi
+alterado ainda; o `authorized_keys` continua intacto.
+
+**7c. Aplicar:**
+
+```bash
+cat /tmp/ak.novo > ~/.ssh/authorized_keys && rm -f /tmp/ak.novo
+cat -n ~/.ssh/authorized_keys | cut -c1-60
+```
+
+> `cat >` em vez de `mv`, de propósito: preserva dono e permissão do arquivo. O `sshd` recusa
+> `authorized_keys` com permissão frouxa, e o sintoma seria você não conseguir mais entrar.
+
+**7d. Testar SEM fechar esta sessão.** Abra um **segundo terminal** na sua máquina e entre:
+
+```bash
+ssh ubuntu@167.126.4.86
+```
+
+**Se entrar:** está feito. Apague a cópia de segurança pela sessão nova:
+
+```bash
+rm -f ~/.ssh/authorized_keys.bak
+```
+
+**Se NÃO entrar:** não feche o primeiro terminal. Por ele, desfaça:
+
+```bash
+cp ~/.ssh/authorized_keys.bak ~/.ssh/authorized_keys
+```
+
+E me mande a mensagem de erro do segundo terminal.
+
+---
+
+### Terminou a migração. E agora?
+
+Nada mais neste documento. A partir daqui:
+
+- O deploy entra como `micasa-deploy`, que só pode rodar `/usr/local/sbin/micasa-pos-deploy`
+  como root.
+- Sua conta `ubuntu` continua com acesso administrativo pela chave `micasa-oracle`.
+- A chave de deploy antiga não vale mais em lugar nenhum.
 
 ## Backup
 
