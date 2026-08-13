@@ -21,14 +21,17 @@ export function novoQueryClient(): QueryClient {
 
 export function renderComRotas(rotas: RouteObject[], entrada: string) {
   const router = createMemoryRouter(rotas, { initialEntries: [entrada] })
+  const queryClient = novoQueryClient()
 
-  return render(
-    <QueryClientProvider client={novoQueryClient()}>
+  const resultado = render(
+    <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <RouterProvider router={router} />
       </AuthProvider>
     </QueryClientProvider>,
   )
+
+  return { ...resultado, queryClient, router }
 }
 
 export function comProvedores(children: ReactNode) {

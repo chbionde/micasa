@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import { CampoTexto } from '../components/CampoTexto'
 import { useAuth } from '../features/auth/auth-context'
@@ -8,7 +9,8 @@ import { getValidationErrors } from '../lib/validation'
 import type { ValidationErrors } from '../lib/validation'
 
 export function ContaPage() {
-  const { user, recarregar, logout } = useAuth()
+  const { user, recarregar, encerrarSessaoLocal } = useAuth()
+  const queryClient = useQueryClient()
   const navigate = useNavigate()
 
   // SecaoPerfil inicializa o estado a partir das props, e useState só
@@ -26,7 +28,10 @@ export function ContaPage() {
       <SecaoSenha />
       <SecaoExcluir
         aoExcluir={async () => {
-          await logout()
+          // O DELETE já apaga todas as sessões no servidor. Chamar /logout
+          // depois dele sempre recebe 401 e impediria esta limpeza local.
+          queryClient.clear()
+          encerrarSessaoLocal()
           navigate('/entrar', { replace: true })
         }}
       />
