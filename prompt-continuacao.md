@@ -243,7 +243,7 @@ Pest, Larastan 6, Pint, Vitest, oxlint, tsc.
 ## 4. ESTADO EM 12/08/2026 ✅
 
 ### Suíte verde
-Pint · Larastan 6 (0 erros) · **162 Pest / 481 asserções** · oxlint · tsc · **32 Vitest** ✅
+Pint · Larastan 6 (0 erros) · **162 Pest / 481 asserções** · oxlint · tsc · **34 Vitest** ✅
 (era 127/359 e 28 no início do dia)
 
 ### Produção
@@ -251,8 +251,7 @@ Pint · Larastan 6 (0 erros) · **162 Pest / 481 asserções** · oxlint · tsc 
 - ✅ Merge na `main` publica sozinho
 - ✅ **O deploy entra como `micasa-deploy`**, conta sem senha cujo único poder de root é rodar
   `/usr/local/sbin/micasa-pos-deploy`. Medido: secret trocado 19:27:04, deploy verde 19:27:52
-- 🚧 CSP estrita validada sem violações nas telas autenticadas; promoção para bloqueante em
-  andamento na #53
+- ✅ CSP estrita bloqueante em produção; HTML, asset e API medidos sem `Report-Only`
 - ✅ Backup diário cifrado, restauração testada
 - ✅ fail2ban, Dependabot, secret scanning, `main` protegida
 - ❌ **HSTS ainda ausente** — é a #54, não começada
@@ -325,7 +324,8 @@ linhas que o certbot escreveu, e esquecer isso devolve o site em HTTP puro sem e
 
 | Issue | O que é | Estado real |
 |---|---|---|
-| **#53** | CSP ausente | Validação em modo relato concluída sem violações; promoção da política estrita para bloqueante em andamento |
+| **#65** | Sair de uma casa refaz consultas para a casa removida | **Em andamento.** Causa reproduzida: invalidações por prefixo antes de atualizar a casa ativa |
+| **#66** | Excluir conta não encerra sessão nem redireciona | Aberta; vem depois da #65 |
 | **#54** | HSTS ausente | **Não começada.** Critério de aceite já ajustado: fecha em `max-age=2592000` (30 dias), com a subida para um ano como passo posterior sem dono |
 | **#55** | Chave de deploy com poder de root | **Quase fechada.** Passos 1–6 feitos e verificados; falta o **passo 7** (remover a chave de deploy antiga do `authorized_keys` do `ubuntu`), reescrito no `infra/README.md` sem depender do `nano` |
 | **#48** | SMTP não entrega em produção | Não começada |
@@ -335,7 +335,7 @@ linhas que o certbot escreveu, e esquecer isso devolve o site em HTTP puro sem e
 ### Ordem decidida pelo dev
 
 ```
-#62 (onboarding do Codex)   →   #53, #54, #55   →   #48 (SMTP)   →   Fatia 2 (#35, #36)
+#65   →   #66   →   #55   →   #54   →   #48 (SMTP)   →   Fatia 2 (#35, #36)
 ```
 
 Ele decidiu em 12/08 que as três sub-issues vêm **antes** da #48: *"pendências soltas primeiro
@@ -367,7 +367,6 @@ o momento natural é ao fim da #48.
   distintos e não há filtro de `paths:`
 - Object Lock no B2 — gatilho: existir volume real
 - Rotação da credencial do B2 com `validDurationSeconds`
-- Aplicar a configuração bloqueante da #53 na VPS depois do merge e conferir os cabeçalhos
 
 ### Já resolvido — não peça de novo (protocolo B5)
 - ✅ Banco de produção limpo, com backup cifrado tirado antes

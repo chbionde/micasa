@@ -57,11 +57,18 @@ export function useRemoverMembro(casaId: number) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (membroId: number) => api.removerMembro(casaId, membroId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: chaves.membros(casaId) })
-      // Sair da casa muda a lista de casas e a casa ativa do usuário.
-      await queryClient.invalidateQueries({ queryKey: chaves.casas })
+    mutationFn: ({ membroId }: { membroId: number; souEu: boolean }) =>
+      api.removerMembro(casaId, membroId),
+    onSuccess: async (_, { souEu }) => {
+      if (souEu) {
+        // Query keys casam por prefixo por padrão. Invalidar apenas `['casas']`
+        // evita refazer membros e convites da casa que acabou de ser removida
+        // do usuário; o componente recarrega a casa ativa logo depois.
+        await queryClient.invalidateQueries({ queryKey: chaves.casas, exact: true })
+        return
+      }
+
+      await queryClient.invalidateQueries({ queryKey: chaves.membros(casaId), exact: true })
     },
   })
 }
