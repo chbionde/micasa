@@ -27,9 +27,9 @@ export function ListaMembros({ casaId, souAdmin }: Props) {
 
     if (!window.confirm(pergunta)) return
 
-    removerMembro.mutate(membro.id, {
-      onSuccess: () => {
-        if (membro.sou_eu) void recarregar()
+    removerMembro.mutate({ membroId: membro.id, souEu: membro.sou_eu }, {
+      onSuccess: async () => {
+        if (membro.sou_eu) await recarregar()
       },
     })
   }

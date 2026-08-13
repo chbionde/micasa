@@ -158,6 +158,58 @@ describe('CasaPage', () => {
     confirmar.mockRestore()
   })
 
+  it('ao sair não refaz consultas para a casa removida', async () => {
+    const user = userEvent.setup()
+    let carregamentosDoUsuario = 0
+
+    apiGet.mockImplementation((url: string) => {
+      if (url === '/api/user') {
+        carregamentosDoUsuario += 1
+        return Promise.resolve({
+          data: {
+            data:
+              carregamentosDoUsuario === 1
+                ? { id: 1, name: 'Carlos', email: 'c@e.com', casa_ativa: CASA }
+                : { id: 1, name: 'Carlos', email: 'c@e.com', casa_ativa: null },
+          },
+        })
+      }
+      if (url.endsWith('/members')) return Promise.resolve({ data: { data: MEMBROS } })
+      if (url.endsWith('/invitations')) return Promise.resolve({ data: { data: [] } })
+      return Promise.reject(new Error(`URL não mockada: ${url}`))
+    })
+    apiDelete.mockResolvedValue({ data: null })
+    const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderCasa()
+
+    await user.click(await screen.findByRole('button', { name: 'Sair da casa' }))
+
+    expect(await screen.findByText(/não está em nenhuma casa/i)).toBeInTheDocument()
+    expect(apiDelete).toHaveBeenCalledTimes(1)
+    expect(apiDelete).toHaveBeenCalledWith('/api/households/7/members/1')
+    expect(apiGet.mock.calls.filter(([url]) => url === '/api/households/7/members')).toHaveLength(1)
+    expect(apiGet.mock.calls.filter(([url]) => url === '/api/households/7/invitations')).toHaveLength(1)
+    confirmar.mockRestore()
+  })
+
+  it('ao remover outra pessoa atualiza somente a lista de membros', async () => {
+    const user = userEvent.setup()
+    mockarApi()
+    apiDelete.mockResolvedValue({ data: null })
+    const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderCasa()
+
+    await user.click(await screen.findByRole('button', { name: 'Remover' }))
+
+    expect(apiDelete).toHaveBeenCalledWith('/api/households/7/members/2')
+    await vi.waitFor(() => {
+      expect(apiGet.mock.calls.filter(([url]) => url === '/api/households/7/members')).toHaveLength(2)
+    })
+    expect(apiGet.mock.calls.filter(([url]) => url === '/api/households/7/invitations')).toHaveLength(1)
+    expect(apiGet.mock.calls.filter(([url]) => url === '/api/user')).toHaveLength(1)
+    confirmar.mockRestore()
+  })
+
   it('avisa quando não há casa ativa', async () => {
     apiGet.mockResolvedValue({
       data: { data: { id: 1, name: 'Carlos', email: 'c@e.com', casa_ativa: null } },

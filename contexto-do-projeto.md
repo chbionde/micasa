@@ -383,7 +383,7 @@ Regras importantes:
 ## 10. Estado em 12/08/2026 e o que vem a seguir
 
 **Suíte verde:** Pint · Larastan 6 (0 erros) · **162 Pest / 481 asserções** · oxlint · tsc ·
-**32 Vitest**
+**34 Vitest**
 
 **Fatias 0 e 1 entregues.** Fatia 2 (listas de compras) tem o back pronto e o front pendente.
 
@@ -391,7 +391,8 @@ Regras importantes:
 
 | Issue | O que é |
 |---|---|
-| **#53** | CSP — validação em modo relato concluída; promoção da política estrita em andamento |
+| **#65** | Sair de uma casa refaz consultas para a casa removida — correção em andamento |
+| **#66** | Excluir conta não limpa a sessão nem redireciona — próxima correção funcional |
 | **#54** | HSTS — não começada; fecha em `max-age=2592000` |
 | **#55** | Chave de deploy — passos 1–6 feitos; falta o passo 7 do `infra/README.md` |
 | **#48** | SMTP: "esqueci minha senha" não entrega nada em produção |
@@ -401,7 +402,7 @@ Regras importantes:
 ### Ordem decidida pelo dev
 
 ```
-#62 (onboarding do Codex)   →   #53, #54, #55   →   #48 (SMTP)   →   Fatia 2 (#35, #36)
+#65 → #66 → #55 → #54 → #48 (SMTP) → Fatia 2 (#35, #36)
 ```
 
 ### Restrição do Claude revogada

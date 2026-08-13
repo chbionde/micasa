@@ -216,7 +216,7 @@ existe** — são 3 casas, com 1 membro cada.
 **Situação:** Corrigido nesta issue: `DeleteAccount` passou a apagar as sessões e o token de redefinição
 pendente, dentro da mesma transação que apaga a conta.
 
-### 🚧 A8 — Sem `Content-Security-Policy` · **Média** — CORREÇÃO PREPARADA
+### ✅ A8 — Sem `Content-Security-Policy` · **Média** — CORRIGIDO
 
 Medido nos cabeçalhos reais de produção em 12/08/2026. Presentes: `X-Content-Type-Options`,
 `X-Frame-Options: DENY`, `Referrer-Policy`. Ausente: CSP.
@@ -226,11 +226,10 @@ não há `dangerouslySetInnerHTML` em lugar nenhum do `web/src`, e não há nada
 Não há XSS conhecido para a CSP conter. Ela vale como a rede embaixo do trapézio — o dia em que
 um XSS aparecer é tarde para instalá-la.
 
-**Situação:** a #53 mediu a política estrita em `Report-Only` nas telas autenticadas e, sem
-violações, preparou sua promoção a bloqueante. A última medição anterior à aplicação manual
-ainda mostrava `Report-Only`; o achado só está corrigido em produção depois que
-`infra/aplicar-nginx.sh` conferir HTML, asset e API. A política preparada restringe scripts,
-estilos, imagens, fontes e conexões à própria origem e bloqueia plugins, `<base>` e enquadramento.
+**Situação:** corrigido na #53. Em 13/08/2026, depois da validação em `Report-Only`, a política
+estrita foi aplicada e medida em HTML, asset e API. Cada resposta trouxe exatamente uma CSP
+bloqueante e nenhuma política de relato. Scripts, estilos, imagens, fontes e conexões estão
+restritos à própria origem; plugins, `<base>` e enquadramento estão bloqueados.
 
 ### ❌ A9 — Sem `Strict-Transport-Security` · **Baixa**
 
