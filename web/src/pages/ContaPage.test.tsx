@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen } from '@testing-library/react'
+import { act, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AxiosError } from 'axios'
 import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import { api } from '../lib/api'
+import { GuestOnly } from '../features/auth/GuestOnly'
 import { ContaPage } from './ContaPage'
 import { renderComRotas } from '../test/utils'
 
@@ -13,6 +14,7 @@ vi.mock('../lib/api', async () => {
 })
 
 const apiGet = vi.mocked(api.get)
+const apiPost = vi.mocked(api.post)
 const apiPatch = vi.mocked(api.patch)
 const apiPut = vi.mocked(api.put)
 const apiDelete = vi.mocked(api.delete)
@@ -29,10 +31,14 @@ function erro422(errors: Record<string, string[]>): AxiosError {
 }
 
 function renderConta() {
-  renderComRotas(
+  return renderComRotas(
     [
+      { path: '/', element: <p>área autenticada</p> },
       { path: '/conta', element: <ContaPage /> },
-      { path: '/entrar', element: <p>tela de login</p> },
+      {
+        element: <GuestOnly />,
+        children: [{ path: '/entrar', element: <p>tela de login</p> }],
+      },
     ],
     '/conta',
   )
@@ -177,6 +183,51 @@ describe('ContaPage', () => {
     await user.click(screen.getByRole('button', { name: 'Apagar definitivamente' }))
 
     expect(apiDelete).toHaveBeenCalledWith('/api/user', { data: { password: 'minha-senha' } })
+  })
+
+  it('após apagar a conta encerra o estado local sem chamar logout remoto', async () => {
+    const user = userEvent.setup()
+    apiDelete.mockResolvedValue({})
+    apiPost.mockRejectedValue({ response: { status: 401 } })
+    const { queryClient } = renderConta()
+    queryClient.setQueryData(['casas'], [{ id: 7, nome: 'Casa antiga' }])
+
+    await user.click(await screen.findByRole('button', { name: 'Quero apagar minha conta' }))
+    await user.type(screen.getByLabelText('Confirme sua senha para apagar'), 'minha-senha')
+    await user.click(screen.getByRole('button', { name: 'Apagar definitivamente' }))
+
+    expect(await screen.findByText('tela de login')).toBeInTheDocument()
+    expect(apiDelete).toHaveBeenCalledTimes(1)
+    expect(apiPost).not.toHaveBeenCalledWith('/logout')
+    expect(queryClient.getQueryData(['casas'])).toBeUndefined()
+  })
+
+  it('ignora uma atualização de identidade iniciada antes de apagar a conta', async () => {
+    const user = userEvent.setup()
+    let concluirRecarga!: (resposta: typeof USUARIO) => void
+    const recargaPendente = new Promise<typeof USUARIO>((resolve) => {
+      concluirRecarga = resolve
+    })
+
+    apiPatch.mockResolvedValue(USUARIO)
+    apiDelete.mockResolvedValue({})
+    apiGet.mockResolvedValueOnce(USUARIO).mockImplementationOnce(() => recargaPendente as never)
+    renderConta()
+
+    await user.click(await screen.findByRole('button', { name: 'Salvar dados' }))
+    await waitFor(() => expect(apiGet).toHaveBeenCalledTimes(2))
+
+    await user.click(screen.getByRole('button', { name: 'Quero apagar minha conta' }))
+    await user.type(screen.getByLabelText('Confirme sua senha para apagar'), 'minha-senha')
+    await user.click(screen.getByRole('button', { name: 'Apagar definitivamente' }))
+    expect(await screen.findByText('tela de login')).toBeInTheDocument()
+
+    await act(async () => {
+      concluirRecarga(USUARIO)
+      await recargaPendente
+    })
+
+    expect(screen.getByText('tela de login')).toBeInTheDocument()
   })
 
   it('mostra o motivo quando a exclusão é bloqueada', async () => {

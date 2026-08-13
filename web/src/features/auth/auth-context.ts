@@ -18,6 +18,8 @@ export type AuthContextValue = {
   login: (email: string, password: string) => Promise<void>
   register: (data: RegisterData) => Promise<void>
   logout: () => Promise<void>
+  /** Limpa apenas o cliente quando o servidor já encerrou a sessão, como após excluir a conta. */
+  encerrarSessaoLocal: () => void
   /** Rebusca o usuário — usado após trocar a casa ativa ou sair de uma casa. */
   recarregar: () => Promise<void>
 }

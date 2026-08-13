@@ -243,7 +243,7 @@ Pest, Larastan 6, Pint, Vitest, oxlint, tsc.
 ## 4. ESTADO EM 12/08/2026 ✅
 
 ### Suíte verde
-Pint · Larastan 6 (0 erros) · **162 Pest / 481 asserções** · oxlint · tsc · **34 Vitest** ✅
+Pint · Larastan 6 (0 erros) · **162 Pest / 481 asserções** · oxlint · tsc · **36 Vitest** ✅
 (era 127/359 e 28 no início do dia)
 
 ### Produção
@@ -255,9 +255,8 @@ Pint · Larastan 6 (0 erros) · **162 Pest / 481 asserções** · oxlint · tsc 
 - ✅ Backup diário cifrado, restauração testada
 - ✅ fail2ban, Dependabot, secret scanning, `main` protegida
 - ❌ **HSTS ainda ausente** — é a #54, não começada
-- ⚠️ **O BANCO ESTÁ VAZIO.** O dev rodou `infra/limpar-banco.sh` em 12/08. Zero contas —
-  ninguém consegue entrar até alguém se cadastrar. As senhas antigas, que escapavam da política
-  nova, deixaram de existir junto
+- ✅ O banco foi limpo em 12/08 e depois voltou a receber contas de teste criadas pelo dev; não
+  presuma contagens atuais sem medir
 
 ### 🪤 ARMADILHA QUE CUSTOU HORAS
 **Mudança em `infra/nginx/` NÃO sai no deploy.** O deploy builda o front, faz `rsync` do `dist`
@@ -324,8 +323,7 @@ linhas que o certbot escreveu, e esquecer isso devolve o site em HTTP puro sem e
 
 | Issue | O que é | Estado real |
 |---|---|---|
-| **#65** | Sair de uma casa refaz consultas para a casa removida | **Em andamento.** Causa reproduzida: invalidações por prefixo antes de atualizar a casa ativa |
-| **#66** | Excluir conta não encerra sessão nem redireciona | Aberta; vem depois da #65 |
+| **#66** | Excluir conta não encerra sessão nem redireciona | **Em andamento.** DELETE já encerra sessões; o logout redundante recebe 401 antes da limpeza local |
 | **#54** | HSTS ausente | **Não começada.** Critério de aceite já ajustado: fecha em `max-age=2592000` (30 dias), com a subida para um ano como passo posterior sem dono |
 | **#55** | Chave de deploy com poder de root | **Quase fechada.** Passos 1–6 feitos e verificados; falta o **passo 7** (remover a chave de deploy antiga do `authorized_keys` do `ubuntu`), reescrito no `infra/README.md` sem depender do `nano` |
 | **#48** | SMTP não entrega em produção | Não começada |
@@ -335,7 +333,7 @@ linhas que o certbot escreveu, e esquecer isso devolve o site em HTTP puro sem e
 ### Ordem decidida pelo dev
 
 ```
-#65   →   #66   →   #55   →   #54   →   #48 (SMTP)   →   Fatia 2 (#35, #36)
+#66   →   #55   →   #54   →   #48 (SMTP)   →   Fatia 2 (#35, #36)
 ```
 
 Ele decidiu em 12/08 que as três sub-issues vêm **antes** da #48: *"pendências soltas primeiro
