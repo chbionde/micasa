@@ -44,14 +44,15 @@ Dito primeiro, porque a ausência é o que costuma virar falsa sensação de cob
 
 ## 2. Achados
 
-13 achados. **10 fechados** dentro da própria #43; 3 seguem em sub-issues.
+13 achados. **12 fechados**; apenas a rampa de HSTS (A9) segue em sub-issue.
 
 - **A1 a A7** — bloco de conta e sessão. Era o único conjunto não observável de fora, e por isso
   o único cuja publicação valia esperar a correção.
 - **A11 e A12** — auditoria no CI e validação em FormRequest.
 - **A13** — corrigido, mas não do jeito que o achado sugeria. Ver a análise no item.
-- **A9 e A10** — em sub-issues, porque qualquer pessoa já os enxerga de fora (HSTS se
-  medem com `curl -D-`) ou porque exigem posição já privilegiada (a chave de deploy).
+- **A8 e A10** — corrigidos nas sub-issues #53 e #55, respectivamente.
+- **A9** — em rampa na sub-issue #54, porque HSTS precisa começar com prazo curto antes de
+  prender os navegadores por 30 dias.
 
 ### ✅ A1 — Trocar o e-mail não exigia a senha atual · **Alta** — CORRIGIDO
 
@@ -231,7 +232,7 @@ estrita foi aplicada e medida em HTML, asset e API. Cada resposta trouxe exatame
 bloqueante e nenhuma política de relato. Scripts, estilos, imagens, fontes e conexões estão
 restritos à própria origem; plugins, `<base>` e enquadramento estão bloqueados.
 
-### ❌ A9 — Sem `Strict-Transport-Security` · **Baixa**
+### ⏳ A9 — Sem `Strict-Transport-Security` · **Baixa** — RAMPA EM ANDAMENTO
 
 Ausente, medido. O redirecionamento 80 → 443 existe e responde 301, mas ele só age **depois** de
 uma requisição em texto claro já ter saído. HSTS fecha essa primeira janela.
@@ -239,21 +240,27 @@ uma requisição em texto claro já ter saído. HSTS fecha essa primeira janela.
 Merece cuidado, não pressa: HSTS prende o domínio em HTTPS pelo prazo do `max-age`, para todo
 navegador que já visitou. Começar com `max-age` curto é o caminho.
 
-### ❌ A10 — A chave de deploy tem poder de root na VPS · **Média**
+**Situação:** a primeira etapa da #54 versiona `max-age=300`, sem `includeSubDomains` ou
+`preload`. Ela só estará ativa depois do merge e da aplicação manual pelo
+`infra/aplicar-nginx.sh`. Após alguns dias estáveis, uma segunda alteração sobe para 30 dias.
 
-`infra/provision.sh:22` define `DEPLOY_USER="${SUDO_USER:-ubuntu}"` e **não cria usuário
-dedicado nem escreve regra de sudoers restrita**. A imagem Ubuntu da Oracle entrega `ubuntu` com
-`NOPASSWD:ALL`.
+### ✅ A10 — A chave de deploy tinha poder de root na VPS · **Média** — CORRIGIDO
+
+Antes da #55, `infra/provision.sh` definia `DEPLOY_USER="${SUDO_USER:-ubuntu}"` e **não criava
+usuário dedicado nem escrevia regra de sudoers restrita**. A imagem Ubuntu da Oracle entrega
+`ubuntu` com `NOPASSWD:ALL`.
 
 Que o sudo é sem senha não é suposição: `infra/deploy.sh` roda `sudo chmod` e `sudo systemctl`
 e a Action o invoca com `BatchMode=yes`, sem tty. Se houvesse prompt de senha, todo deploy
 falharia — e os deploys passam.
 
-Portanto: quem obtiver o secret `SSH_PRIVATE_KEY` do GitHub tem root na produção.
+**Situação:** corrigido na #55. A Action entra como `micasa-deploy`; o sudo permite somente o
+wrapper `/usr/local/sbin/micasa-pos-deploy`, sem argumentos e sem escrita pela conta. A chave
+foi rotacionada, um deploy completo passou pela conta restrita e a chave antiga foi removida do
+`authorized_keys` de `ubuntu` em 13/08/2026.
 
-ℹ️ Restringir o sudo aos três comandos do `deploy.sh` reduz o pior caso de "root na máquina"
-para "controle da aplicação". Não elimina o segundo — a chave abre um shell e o `deploy.sh` faz
-`git pull`. É mitigação real, não conserto.
+Isso reduz o pior caso de "root na máquina" para "controle da aplicação". Não elimina o
+segundo — a chave abre um shell e o `deploy.sh` faz `git pull`. É mitigação real, não conserto.
 
 ### ✅ A11 — `composer audit` e `npm audit` não rodavam no CI · **Baixa** — CORRIGIDO
 

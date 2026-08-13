@@ -207,7 +207,7 @@ commit ficou órfão, sem PR, e o dev teve que mergear na `main` à mão. Ele co
 - **Commits em Conventional Commits, sem `Co-Authored-By`.** Multi-linha via `git commit -F -`
   com heredoc. O corpo explica *por quê*.
 - **Documento didático** em `docs/aprendizado/NN-titulo.md` ao fim de toda tarefa multi-comando.
-  **O próximo é o 14.**
+  **O próximo é o 18.**
 - **Modo tutor de React obrigatório** em toda entrega de front.
 - **Segredos: avise ANTES**, na mesma mensagem em que pedir para ele manipular um.
 - Ele **valoriza que você segure o merge** quando a issue não está de fato resolvida.
@@ -254,7 +254,8 @@ Pint · Larastan 6 (0 erros) · **162 Pest / 481 asserções** · oxlint · tsc 
 - ✅ CSP estrita bloqueante em produção; HTML, asset e API medidos sem `Report-Only`
 - ✅ Backup diário cifrado, restauração testada
 - ✅ fail2ban, Dependabot, secret scanning, `main` protegida
-- ❌ **HSTS ainda ausente** — é a #54, não começada
+- ⏳ **HSTS em rampa** — a etapa inicial versiona `max-age=300`; não presuma que chegou à
+  produção antes de executar e conferir `infra/aplicar-nginx.sh`
 - ✅ O banco foi limpo em 12/08 e depois voltou a receber contas de teste criadas pelo dev; não
   presuma contagens atuais sem medir
 
@@ -294,7 +295,7 @@ linhas que o certbot escreveu, e esquecer isso devolve o site em HTTP puro sem e
 | `docs/fluxo-trabalho.md` | Fluxo GitHub; exceção de `docs:` direto na main |
 | `docs/como-executar-e-testar.md` | ⚠️ **Desatualizado**: diz "Fatia 2 em andamento", não menciona backup nem segurança |
 | `infra/README.md` | Runbook da VPS. Contém o **modelo de passo a passo** que o dev aceita |
-| `docs/aprendizado/01..13` | O **13** documenta a migração do Claude Code para o Codex |
+| `docs/aprendizado/01..17` | O **13** documenta a migração do Claude Code para o Codex |
 | Memória privada do Claude | Histórico somente; não copiar, pois contém fatos ultrapassados |
 
 ---
@@ -323,9 +324,7 @@ linhas que o certbot escreveu, e esquecer isso devolve o site em HTTP puro sem e
 
 | Issue | O que é | Estado real |
 |---|---|---|
-| **#66** | Excluir conta não encerra sessão nem redireciona | **Em andamento.** DELETE já encerra sessões; o logout redundante recebe 401 antes da limpeza local |
-| **#54** | HSTS ausente | **Não começada.** Critério de aceite já ajustado: fecha em `max-age=2592000` (30 dias), com a subida para um ano como passo posterior sem dono |
-| **#55** | Chave de deploy com poder de root | **Quase fechada.** Passos 1–6 feitos e verificados; falta o **passo 7** (remover a chave de deploy antiga do `authorized_keys` do `ubuntu`), reescrito no `infra/README.md` sem depender do `nano` |
+| **#54** | HSTS ausente | **Em andamento.** Etapa inicial `max-age=300`; fecha em `max-age=2592000` (30 dias), com a subida para um ano como passo posterior sem dono |
 | **#48** | SMTP não entrega em produção | Não começada |
 | **#35 · #36** | Fatia 2 — listas de compras | Não começadas. #36 é front: **modo tutor obrigatório** |
 | #7–#12 | Épicos das fatias 3–8 | Não mexer |
@@ -333,7 +332,7 @@ linhas que o certbot escreveu, e esquecer isso devolve o site em HTTP puro sem e
 ### Ordem decidida pelo dev
 
 ```
-#66   →   #55   →   #54   →   #48 (SMTP)   →   Fatia 2 (#35, #36)
+#54   →   #48 (SMTP)   →   Fatia 2 (#35, #36)
 ```
 
 Ele decidiu em 12/08 que as três sub-issues vêm **antes** da #48: *"pendências soltas primeiro
@@ -342,13 +341,10 @@ e depois o planejamento já existente, assim evitamos débito técnico futuro"*.
 ### Primeira ação
 
 1. Ler `AGENTS.md`, `prompt-casa-os.md`, `contexto-do-projeto.md` e este arquivo
-2. Conferir se a issue #62 foi fechada pelo merge e se não há outro PR ativo
-3. Se a #62 ainda estiver aberta, terminar somente ela; não iniciar outra tarefa
-4. Depois do merge, conferir estado: `git log --oneline -5`, `gh issue list`, suíte verde
-5. **Perguntar ao dev qual das três sub-issues retomar**, porque todas dependem de ação dele:
-   - #53 depende do console na janela anônima
-   - #55 depende do passo 7
-   - #54 é a única que dá para começar sozinho — mas exige `aplicar-nginx.sh` na VPS, que é ele
+2. Conferir o estado da issue #54 e se não há outro PR ativo
+3. Se a etapa de cinco minutos já tiver sido mergeada, confirmar se foi aplicada pelo
+   `infra/aplicar-nginx.sh` e medir produção antes de iniciar os 30 dias
+4. Não iniciar #48 enquanto houver PR ou etapa operacional ativa da #54
 
 ### O item de produto que ninguém levantou ainda
 
