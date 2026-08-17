@@ -207,7 +207,7 @@ commit ficou órfão, sem PR, e o dev teve que mergear na `main` à mão. Ele co
 - **Commits em Conventional Commits, sem `Co-Authored-By`.** Multi-linha via `git commit -F -`
   com heredoc. O corpo explica *por quê*.
 - **Documento didático** em `docs/aprendizado/NN-titulo.md` ao fim de toda tarefa multi-comando.
-  **O próximo é o 18.**
+  **O próximo é o 19.**
 - **Modo tutor de React obrigatório** em toda entrega de front.
 - **Segredos: avise ANTES**, na mesma mensagem em que pedir para ele manipular um.
 - Ele **valoriza que você segure o merge** quando a issue não está de fato resolvida.
@@ -295,7 +295,7 @@ linhas que o certbot escreveu, e esquecer isso devolve o site em HTTP puro sem e
 | `docs/fluxo-trabalho.md` | Fluxo GitHub; exceção de `docs:` direto na main |
 | `docs/como-executar-e-testar.md` | ⚠️ **Desatualizado**: diz "Fatia 2 em andamento", não menciona backup nem segurança |
 | `infra/README.md` | Runbook da VPS. Contém o **modelo de passo a passo** que o dev aceita |
-| `docs/aprendizado/01..17` | O **13** documenta a migração do Claude Code para o Codex |
+| `docs/aprendizado/01..18` | O **13** documenta a migração do Claude Code para o Codex |
 | Memória privada do Claude | Histórico somente; não copiar, pois contém fatos ultrapassados |
 
 ---
