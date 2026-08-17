@@ -445,13 +445,30 @@ voltar atrás, é o mesmo caminho de qualquer restauração: `./infra/restaurar.
 
 ## Cabeçalhos de segurança
 
-Moram em `infra/nginx/cabecalhos-seguranca.conf`, num arquivo só, porque `add_header` no nginx **não é aditivo**: uma `location` com add_header próprio descarta todos os herdados do `server`. São quatro cabeçalhos que precisariam ser repetidos em três locations — doze linhas para manter em sincronia à mão, e a primeira que envelhecesse sozinha viraria um buraco silencioso.
+Moram em `infra/nginx/cabecalhos-seguranca.conf`, num arquivo só, porque `add_header` no nginx **não é aditivo**: uma `location` com add_header próprio descarta todos os herdados do `server`. São cinco cabeçalhos que precisariam ser repetidos em três locations — quinze linhas para manter em sincronia à mão, e a primeira que envelhecesse sozinha viraria um buraco silencioso.
 
 Conferir de fora, a qualquer momento:
 
 ```bash
-curl -sSI https://micasa-bionde.duckdns.org/ | grep -iE "x-content-type|x-frame|referrer|content-security"
+curl -sSI https://micasa-bionde.duckdns.org/ | grep -iE "strict-transport|x-content-type|x-frame|referrer|content-security"
 ```
+
+### Sobre a rampa de HSTS
+
+HSTS ensina o navegador que o domínio só deve ser aberto por HTTPS, inclusive quando alguém
+digita o endereço sem `https://`. O redirecionamento 301 não substitui isso: ele só responde
+depois que a primeira requisição em texto claro já saiu do aparelho.
+
+A ativação é gradual para manter o rollback possível:
+
+1. `max-age=300` (cinco minutos) por alguns dias;
+2. `max-age=2592000` (30 dias), que encerra a issue #54;
+3. considerar um ano somente depois de uma renovação automática real do certificado.
+
+Não usamos `includeSubDomains`, porque hoje não há nomes abaixo de
+`micasa-bionde.duckdns.org` e não devemos obrigar futuros subdomínios sem medir, nem `preload`,
+cuja remoção da lista embutida nos navegadores pode levar meses. Se o TLS falhar na primeira
+etapa, corrija o certificado e aguarde no máximo cinco minutos; não há botão para ignorar HSTS.
 
 ### Sobre a CSP bloqueante
 

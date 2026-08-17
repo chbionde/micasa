@@ -150,6 +150,7 @@ rm -f "${BACKUP}" "${BACKUP_SNIPPET}"
 log "Conferindo os cabeçalhos em produção"
 FALHOU_CONFERENCIA=0
 POLITICA_CSP_ESPERADA="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+HSTS_ESPERADO="max-age=300"
 
 conferir_resposta() {
   local rotulo="$1"
@@ -158,6 +159,7 @@ conferir_resposta() {
   local cabecalhos
   local status
   local politica
+  local hsts
   local falhou=0
 
   cabecalhos="$(curl -sS --max-time 15 --dump-header - --output /dev/null \
@@ -177,7 +179,7 @@ conferir_resposta() {
   fi
 
   for h in X-Content-Type-Options X-Frame-Options Referrer-Policy \
-           Content-Security-Policy; do
+           Strict-Transport-Security Content-Security-Policy; do
     if grep -qi "^${h}:" <<<"${cabecalhos}"; then
       printf '    ✓ %s\n' "${h}"
     else
@@ -185,6 +187,18 @@ conferir_resposta() {
       falhou=1
     fi
   done
+
+  hsts="$(sed -n 's/^Strict-Transport-Security:[[:space:]]*//Ip' <<<"${cabecalhos}" \
+    | tr -d '\r')"
+  if [[ "$(grep -ci '^Strict-Transport-Security:' <<<"${cabecalhos}")" -ne 1 ]]; then
+    aviso "${rotulo}: esperava exatamente um cabeçalho Strict-Transport-Security."
+    falhou=1
+  elif [[ "${hsts}" != "${HSTS_ESPERADO}" ]]; then
+    aviso "${rotulo}: HSTS não corresponde à etapa atual da rampa (${HSTS_ESPERADO})."
+    falhou=1
+  else
+    printf '    ✓ HSTS %s, sem includeSubDomains ou preload\n' "${HSTS_ESPERADO}"
+  fi
 
   politica="$(sed -n 's/^Content-Security-Policy:[[:space:]]*//Ip' <<<"${cabecalhos}" \
     | tr -d '\r')"

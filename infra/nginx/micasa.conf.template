@@ -35,7 +35,7 @@ server {
     # cabeçalhos, e a proteção sobraria só nas respostas JSON, que é onde menos
     # importa.
     #
-    # O conteúdo mora em infra/nginx/cabecalhos-seguranca.conf: são quatro
+    # O conteúdo mora em infra/nginx/cabecalhos-seguranca.conf: são cinco
     # cabeçalhos, e mantê-los em três cópias à mão seria pedir para uma delas
     # envelhecer sozinha.
     include snippets/micasa-seguranca.conf;

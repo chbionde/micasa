@@ -380,7 +380,7 @@ Regras importantes:
 
 ---
 
-## 10. Estado em 12/08/2026 e o que vem a seguir
+## 10. Estado em 13/08/2026 e o que vem a seguir
 
 **Suíte verde:** Pint · Larastan 6 (0 erros) · **162 Pest / 481 asserções** · oxlint · tsc ·
 **36 Vitest**
@@ -391,9 +391,7 @@ Regras importantes:
 
 | Issue | O que é |
 |---|---|
-| **#66** | Excluir conta não limpa a sessão nem redireciona — correção em andamento |
-| **#54** | HSTS — não começada; fecha em `max-age=2592000` |
-| **#55** | Chave de deploy — passos 1–6 feitos; falta o passo 7 do `infra/README.md` |
+| **#54** | HSTS — etapa inicial `max-age=300` em andamento; fecha em `2592000` |
 | **#48** | SMTP: "esqueci minha senha" não entrega nada em produção |
 | **#35 · #36** | Fatia 2 — listas de compras. A #36 é front, com modo tutor obrigatório |
 | #7–#12 | Épicos das fatias 3–8; não mexer |
@@ -401,7 +399,7 @@ Regras importantes:
 ### Ordem decidida pelo dev
 
 ```
-#66 → #55 → #54 → #48 (SMTP) → Fatia 2 (#35, #36)
+#54 → #48 (SMTP) → Fatia 2 (#35, #36)
 ```
 
 ### Restrição do Claude revogada
